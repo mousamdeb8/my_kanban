@@ -1,24 +1,25 @@
-// backend/server.js
-require("./models/Task");
 const express = require("express");
 const cors = require("cors");
+const { sequelize } = require("./models");
+
 const taskRoutes = require("./routes/taskRoutes");
-require("./database");
+const userRoutes = require("./routes/userRoutes");
 
 const app = express();
+const PORT = 8000;
 
+// Middleware
 app.use(cors());
 app.use(express.json());
 
-// Register routes correctly
+// Routes
 app.use("/api/tasks", taskRoutes);
+app.use("/api/users", userRoutes);
 
-// Root route
-app.get("/", (req, res) => {
-  res.send("Kanban API is running");
-});
+// Test root
+app.get("/", (req, res) => res.send("Backend is running"));
 
-const PORT = 8000;
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+// Sync database and start server
+sequelize.sync({ alter: true }).then(() => {
+  app.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`));
 });

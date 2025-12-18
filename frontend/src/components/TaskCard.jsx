@@ -2,9 +2,10 @@ import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
 export default function TaskCard({ task, onClick }) {
-  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({
-    id: task.id,
-  });
+  const { attributes, listeners, setNodeRef, transform, transition } =
+    useSortable({
+      id: task.id,
+    });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -29,16 +30,19 @@ export default function TaskCard({ task, onClick }) {
     return "bg-green-100 text-green-700";
   };
 
+  // 🔽 SAFE: supports BOTH old (assignee string) and new (user object)
+  const assigneeName =
+    task.user?.name || task.assignee || "Unassigned";
+
   return (
     <div
       ref={setNodeRef}
       style={style}
       {...attributes}
       {...listeners}
-      onDoubleClick={onClick}   // <-- Always opens edit modal
+      onDoubleClick={onClick}
       className="cursor-pointer bg-white p-4 rounded-xl shadow hover:shadow-md border border-gray-200 relative select-none"
     >
-      {/* Disable all inner pointer events so double-click works anywhere */}
       <div className="pointer-events-none">
         {/* Priority + Due Date */}
         <div className="flex justify-between mb-2">
@@ -63,7 +67,9 @@ export default function TaskCard({ task, onClick }) {
         <h3 className="font-semibold text-gray-800">{task.title}</h3>
 
         {task.description && (
-          <p className="text-sm text-gray-500 mt-1">{task.description}</p>
+          <p className="text-sm text-gray-500 mt-1">
+            {task.description}
+          </p>
         )}
 
         {/* Tag */}
@@ -86,11 +92,11 @@ export default function TaskCard({ task, onClick }) {
         {/* Assignee */}
         <div className="mt-3 flex items-center gap-2">
           <div className="w-7 h-7 bg-gray-200 rounded-full flex items-center justify-center text-xs font-semibold">
-            {task.assignee ? task.assignee[0].toUpperCase() : "U"}
+            {assigneeName[0].toUpperCase()}
           </div>
 
           <span className="text-gray-700 text-sm">
-            {task.assignee || "Unassigned"}
+            {assigneeName}
           </span>
         </div>
       </div>

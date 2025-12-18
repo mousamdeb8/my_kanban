@@ -14,11 +14,11 @@ export default function Column({ id, name, tasks, onEditTask }) {
   return (
     <div
       ref={setNodeRef}
-      className="w-80 bg-white rounded-xl shadow overflow-hidden flex flex-col h-[80vh]" // ✅ added flex & height
+      className="w-80 bg-white rounded-xl shadow overflow-hidden flex flex-col h-[80vh]"
     >
       <div className={`${colors[id]} text-white px-4 py-2 font-semibold`}>{name}</div>
 
-      <div className="p-5 flex-1 overflow-y-auto"> {/* ✅ scroll + expand */}
+      <div className="p-5 flex-1 overflow-y-auto">
         <SortableContext
           items={tasks?.map((t) => t.id) || []}
           strategy={verticalListSortingStrategy}
@@ -28,7 +28,13 @@ export default function Column({ id, name, tasks, onEditTask }) {
               <p className="text-gray-400 text-sm italic">No tasks</p>
             ) : (
               tasks.map((task) => (
-                <TaskCard key={task.id} task={task} onClick={() => onEditTask(task)} />
+                // 🔹 Use task.user?.name fallback
+                <TaskCard
+                  key={task.id}
+                  task={task}
+                  assigneeName={task.assigneeName || "Unassigned"} 
+                  onClick={() => onEditTask(task)}
+                />
               ))
             )}
           </div>
