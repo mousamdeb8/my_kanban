@@ -1,4 +1,5 @@
 import axios from "axios";
+import { ConnectionRefusedError } from "sequelize";
 
 const API = "http://localhost:8000/api/tasks"; // ✅ correct backend URL
 
@@ -31,3 +32,6 @@ export const deleteTask = async (id) => {
   const res = await axios.delete(`${API}/${id}`);
   return res.data;
 };
+
+
+

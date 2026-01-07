@@ -4,20 +4,17 @@ import toast from "react-hot-toast";
 export default function CreateTaskModal({ onClose, onCreate }) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-
   const [priority, setPriority] = useState("");
   const [status, setStatus] = useState("");
   const [dueDate, setDueDate] = useState("");
-
   const [tag, setTag] = useState("");
 
-  // 🔽 NEW: users + selected user
   const [users, setUsers] = useState([]);
   const [userId, setUserId] = useState("");
 
   const [loading, setLoading] = useState(false);
 
-  // 🔽 NEW: fetch users once
+  // fetch users once
   useEffect(() => {
     fetch("http://localhost:8000/api/users")
       .then((res) => res.json())
@@ -26,65 +23,46 @@ export default function CreateTaskModal({ onClose, onCreate }) {
   }, []);
 
   const handleSubmit = async () => {
-    if (!title.trim()) {
-      toast.error("Please enter Title");
-      return;
-    }
-
-    if (!priority) {
-      toast.error("Please select Priority");
-      return;
-    }
-
-    if (!status) {
-      toast.error("Please select Status");
-      return;
-    }
-
-    if (!dueDate) {
-      toast.error("Please select Due Date");
-      return;
-    }
-
-    if (!userId) {
-      toast.error("Please select Assignee");
-      return;
-    }
+    // 🔹 VALIDATION TOASTS
+    if (!title.trim()) return toast.error("Please enter Title");
+    if (!priority) return toast.error("Please select Priority");
+    if (!status) return toast.error("Please select Status");
+    if (!dueDate) return toast.error("Please select Due Date");
+    if (!userId) return toast.error("Please select Assignee");
 
     setLoading(true);
 
+    // 🔹 Build payload without null fields
+    const payload = {
+      title: title.trim(),
+      priority,
+      status,
+      dueDate,
+      user_id: Number(userId), // ✅ backend expects snake_case
+    };
+
+    if (description.trim()) payload.description = description.trim();
+    if (tag.trim()) payload.tag = tag.trim();
+    payload.attachments = []; // keep empty array
+
     try {
-      await onCreate({
-        title: title.trim(),
-        description: description.trim() || null,
-        priority,
-        status,
-        dueDate,
-        tag: tag.trim() || null,
-
-        // 🔽 IMPORTANT CHANGE
-        userId: Number(userId),
-
-        attachments: [],
-      });
-
-      toast.success("Task created successfully");
-
-      // reset
-      setTitle("");
-      setDescription("");
-      setPriority("");
-      setStatus("");
-      setDueDate("");
-      setTag("");
-      setUserId("");
-
-      onClose();
-    } catch {
-      toast.error("Task not able to create");
-    } finally {
-      setLoading(false);
+      await onCreate(payload); // call Home.jsx handler
+    } catch (err) {
+      console.error("Modal create task error:", err);
+      // no toast here
     }
+
+    // 🔹 RESET FIELDS
+    setTitle("");
+    setDescription("");
+    setPriority("");
+    setStatus("");
+    setDueDate("");
+    setTag("");
+    setUserId("");
+
+    onClose();
+    setLoading(false);
   };
 
   return (
@@ -156,7 +134,7 @@ export default function CreateTaskModal({ onClose, onCreate }) {
           className="w-full border px-3 py-2 mb-3 rounded"
         />
 
-        {/* 🔽 ASSIGNEE DROPDOWN (NEW) */}
+        {/* Assignee Dropdown */}
         <select
           value={userId}
           onChange={(e) => setUserId(e.target.value)}

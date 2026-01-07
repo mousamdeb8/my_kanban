@@ -161,7 +161,6 @@ export default function Home() {
               key={col.id}
               id={col.id}
               name={col.name}
-              // 🔹 Only change: map user.name safely
               tasks={tasks
                 .filter((t) => t.status === col.id)
                 .map((t) => ({
@@ -192,3 +191,5 @@ export default function Home() {
     </>
   );
 }
+
+

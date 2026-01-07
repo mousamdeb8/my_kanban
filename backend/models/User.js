@@ -9,9 +9,11 @@ module.exports = (sequelize, DataTypes) => {
     },
     {
       tableName: "users",
-      timestamps: false // avoid createdAt/updatedAt crash
+      timestamps: false // avoid createdAt/updatedAt crash //Changed been done!!
     }
   );
 
   return User;
 };
+
+
