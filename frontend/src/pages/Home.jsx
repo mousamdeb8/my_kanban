@@ -14,6 +14,11 @@ export default function Home() {
   const [openCreate, setOpenCreate] = useState(false);
   const [editTask, setEditTask] = useState(null);
 
+  //search & filter states
+  const [searchText, setSearchText] = useState("");
+  const [filterPriority, setFilterPriority] = useState("");
+  const [filterAssignee, setFilterAssignee] = useState(""); // NEW
+
   const columns = [
     { id: "todo", name: "TODO" },
     { id: "inprogress", name: "IN PROGRESS" },
@@ -29,7 +34,7 @@ export default function Home() {
     }
   };
 
-  // 🔹 LOAD TASKS (with user info)
+  //  LOAD TASKS
   const loadTasks = async () => {
     try {
       const res = await fetch("http://localhost:8000/api/tasks", {
@@ -45,6 +50,23 @@ export default function Home() {
   useEffect(() => {
     loadTasks();
   }, []);
+
+  // filtered tasks (search + priority + assignee)
+  const filteredTasks = tasks.filter((task) => {
+    const matchesSearch = task.title
+      .toLowerCase()
+      .includes(searchText.toLowerCase());
+
+    const matchesPriority = filterPriority
+      ? task.priority === filterPriority
+      : true;
+
+    const matchesAssignee = filterAssignee
+      ? task.user_id === Number(filterAssignee)
+      : true;
+
+    return matchesSearch && matchesPriority && matchesAssignee;
+  });
 
   // DRAG & DROP HANDLER
   const handleDragEnd = async ({ active, over }) => {
@@ -82,7 +104,7 @@ export default function Home() {
     }
   };
 
-  // CREATE TASK
+  // CREATE / UPDATE / DELETE unchanged (kept as-is)
   const handleCreateTask = async (task) => {
     try {
       const res = await fetch("http://localhost:8000/api/tasks", {
@@ -101,7 +123,6 @@ export default function Home() {
     }
   };
 
-  // UPDATE TASK
   const handleUpdateTask = async (task) => {
     try {
       const res = await fetch(`http://localhost:8000/api/tasks/${task.id}`, {
@@ -123,7 +144,6 @@ export default function Home() {
     }
   };
 
-  // DELETE TASK
   const handleDeleteTask = async (id) => {
     try {
       const res = await fetch(`http://localhost:8000/api/tasks/${id}`, {
@@ -154,6 +174,44 @@ export default function Home() {
         </button>
       </header>
 
+      {/*Search + Filters */}
+      <div className="flex gap-4 px-6 py-3 bg-gray-50">
+        <input
+          type="text"
+          placeholder="Search tasks..."
+          value={searchText}
+          onChange={(e) => setSearchText(e.target.value)}
+          className="px-3 py-2 border rounded-md w-64"
+        />
+
+        <select
+          value={filterPriority}
+          onChange={(e) => setFilterPriority(e.target.value)}
+          className="px-3 py-2 border rounded-md"
+        >
+          <option value="">All Priorities</option>
+          <option value="High">High</option>
+          <option value="Medium">Medium</option>
+          <option value="Low">Low</option>
+        </select>
+
+        {/*Assignee filter */}
+        <select
+          value={filterAssignee}
+          onChange={(e) => setFilterAssignee(e.target.value)}
+          className="px-3 py-2 border rounded-md"
+        >
+          <option value="">All Assignees</option>
+          {[...new Map(tasks.map(t => [t.user_id, t.user])).values()]
+            .filter(Boolean)
+            .map((user) => (
+              <option key={user.id} value={user.id}>
+                {user.name}
+              </option>
+            ))}
+        </select>
+      </div>
+
       <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
         <div className="flex gap-6 p-6">
           {columns.map((col) => (
@@ -161,12 +219,21 @@ export default function Home() {
               key={col.id}
               id={col.id}
               name={col.name}
-              tasks={tasks
+              tasks={filteredTasks
                 .filter((t) => t.status === col.id)
-                .map((t) => ({
-                  ...t,
-                  assigneeName: t.user?.name || "Unassigned",
-                }))}
+                .map((t) => {
+                  // ✅ NEW: overdue flag
+                  const isOverdue =
+                    t.dueDate &&
+                    new Date(t.dueDate) < new Date() &&
+                    t.status !== "done";
+
+                  return {
+                    ...t,
+                    assigneeName: t.user?.name || "Unassigned",
+                    isOverdue, // pass to Column
+                  };
+                })}
               onEditTask={(task) => setEditTask(task)}
             />
           ))}
@@ -191,5 +258,3 @@ export default function Home() {
     </>
   );
 }
-
-
