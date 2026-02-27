@@ -1,13 +1,18 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import Home from "./pages/Home"; // <- make sure path & casing is correct
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import Layout from "./components/Layout";
+import Summary from "./pages/Summary";
+import Home from "./pages/Home";
 
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<Home />} />
+        <Route path="/" element={<Layout />}>
+          <Route index element={<Navigate to="/summary" replace />} />
+          <Route path="summary" element={<Summary />} />
+          <Route path="board" element={<Home />} />
+        </Route>
       </Routes>
     </BrowserRouter>
   );
 }
-
