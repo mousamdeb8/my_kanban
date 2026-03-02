@@ -1,108 +1,103 @@
 const express = require("express");
-const router = express.Router();
-const { Task, User } = require("../models");
+const router  = express.Router();
+const { Task, User, Project } = require("../models");
+const { sendTaskAssignedEmail } = require("../services/emailService");
 
-// 🔹 GET all tasks with user details
 router.get("/", async (req, res) => {
   try {
+    const where = {};
+    if (req.query.project_id) where.project_id = Number(req.query.project_id);
     const tasks = await Task.findAll({
-      include: { model: User, as: "user", attributes: ["id", "name", "email"] },
+      where,
+      include: [{ model: User, as: "user", attributes: ["id","name","email"] }],
+      order: [["createdAt","DESC"]],
     });
     res.json(tasks);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  } catch (err) { res.status(500).json({ message: "Failed", error: err.message }); }
 });
 
-// 🔹 GET task by ID
-router.get("/:id", async (req, res) => {
-  try {
-    const task = await Task.findByPk(req.params.id, {
-      include: { model: User, as: "user", attributes: ["id", "name", "email"] },
-    });
-    if (!task) return res.status(404).json({ error: "Task not found" });
-    res.json(task);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// 🔹 CREATE task
 router.post("/", async (req, res) => {
   try {
-    // Validate user_id
-    const user = await User.findByPk(req.body.user_id);
-    if (!user) return res.status(400).json({ error: "Invalid user_id" });
-
-    const task = await Task.create({
-      title: req.body.title,
-      description: req.body.description || null,
-      priority: req.body.priority || "Low",
-      status: req.body.status || "todo",
-      user_id: req.body.user_id,
-      dueDate: req.body.dueDate || null,
-      tag: req.body.tag || null,
-      attachments: req.body.attachments || [],
+    const task = await Task.create(req.body);
+    const full = await Task.findByPk(task.id, {
+      include: [{ model: User, as: "user", attributes: ["id","name","email"] }],
     });
-    res.json(task);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+
+    // Send assignment email if assignee has email
+    if (full.user && full.user.email && req.body.project_id) {
+      try {
+        const project = await Project.findByPk(req.body.project_id);
+        await sendTaskAssignedEmail({
+          assigneeName:  full.user.name,
+          assigneeEmail: full.user.email,
+          taskTitle:     full.title,
+          taskDescription: full.description || "",
+          priority:      full.priority || "Medium",
+          dueDate:       full.dueDate,
+          projectName:   project?.name || "Kanban Project",
+          assignedBy:    req.body.assignedBy || "A team member",
+        });
+      } catch (emailErr) {
+        console.error("Email failed (task still created):", emailErr.message);
+      }
+    }
+
+    res.status(201).json(full);
+  } catch (err) { res.status(500).json({ message: "Failed", error: err.message }); }
 });
 
-// 🔹 UPDATE STATUS ONLY (drag & drop)
-router.patch("/:id/status", async (req, res) => {
-  try {
-    const task = await Task.findByPk(req.params.id);
-    if (!task) return res.status(404).json({ error: "Task not found" });
-
-    await task.update({ status: req.body.status.toLowerCase() });
-    res.json(task);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// 🔹 UPDATE FULL TASK
 router.put("/:id", async (req, res) => {
   try {
     const task = await Task.findByPk(req.params.id);
-    if (!task) return res.status(404).json({ error: "Task not found" });
+    if (!task) return res.status(404).json({ message: "Not found" });
 
-    // Validate user_id if provided
-    if (req.body.user_id) {
-      const user = await User.findByPk(req.body.user_id);
-      if (!user) return res.status(400).json({ error: "Invalid user_id" });
-    }
+    const oldUserId = task.user_id;
+    await task.update(req.body);
 
-    await task.update({
-      title: req.body.title,
-      description: req.body.description || null,
-      priority: req.body.priority || "Low",
-      status: req.body.status || task.status,
-      user_id: req.body.user_id,
-      dueDate: req.body.dueDate || null,
-      tag: req.body.tag || null,
-      attachments: req.body.attachments || [],
+    const full = await Task.findByPk(task.id, {
+      include: [{ model: User, as: "user", attributes: ["id","name","email"] }],
     });
 
-    res.json(task);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+    // Send email if assignee CHANGED
+    const newUserId = req.body.user_id;
+    if (newUserId && newUserId !== oldUserId && full.user?.email) {
+      try {
+        const project = await Project.findByPk(full.project_id);
+        await sendTaskAssignedEmail({
+          assigneeName:    full.user.name,
+          assigneeEmail:   full.user.email,
+          taskTitle:       full.title,
+          taskDescription: full.description || "",
+          priority:        full.priority || "Medium",
+          dueDate:         full.dueDate,
+          projectName:     project?.name || "Kanban Project",
+          assignedBy:      req.body.assignedBy || "A team member",
+        });
+      } catch (emailErr) {
+        console.error("Email failed:", emailErr.message);
+      }
+    }
+
+    res.json(full);
+  } catch (err) { res.status(500).json({ message: "Failed", error: err.message }); }
 });
 
-// 🔹 DELETE task
+router.patch("/:id/status", async (req, res) => {
+  try {
+    const task = await Task.findByPk(req.params.id);
+    if (!task) return res.status(404).json({ message: "Not found" });
+    await task.update({ status: req.body.status });
+    res.json(task);
+  } catch (err) { res.status(500).json({ message: "Failed", error: err.message }); }
+});
+
 router.delete("/:id", async (req, res) => {
   try {
     const task = await Task.findByPk(req.params.id);
-    if (!task) return res.status(404).json({ error: "Task not found" });
-
+    if (!task) return res.status(404).json({ message: "Not found" });
     await task.destroy();
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+    res.json({ message: "Deleted" });
+  } catch (err) { res.status(500).json({ message: "Failed", error: err.message }); }
 });
 
 module.exports = router;
