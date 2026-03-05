@@ -1,48 +1,81 @@
 import { NavLink, Outlet, useParams, useNavigate } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
 import { useTheme } from "../context/ThemeContext";
+import { useAuth } from "../context/AuthContext";
 import toast from "react-hot-toast";
+import NotificationBell from "./NotificationBell";
 
+const API = "http://localhost:8000";
+const ROLE_BADGE = {
+  admin:     "bg-red-100 text-red-700",
+  developer: "bg-purple-100 text-purple-700",
+  member:    "bg-blue-100 text-blue-700",
+  intern:    "bg-green-100 text-green-700",
+};
 const NAV = [
   { key: "summary",  label: "Summary",  icon: "⊞" },
-  { key: "board",    label: "Board",    icon: "▦" },
+  { key: "board",    label: "Board",    icon: "⊟" },
   { key: "timeline", label: "Timeline", icon: "≡" },
+  { key: "team",     label: "Team",     icon: "👥" },
+  { key: "accounts", label: "Accounts",  icon: "🔐", adminOnly: true },
 ];
 
 export default function Layout() {
   const { projectId } = useParams();
-  const navigate = useNavigate();
+  const navigate      = useNavigate();
   const { dark, toggle } = useTheme();
+  const { user, logout, token } = useAuth();
 
-  const [project,  setProject]  = useState(null);
-  const [projects, setProjects] = useState([]);
-  const [showMenu, setShowMenu] = useState(false);
-  const [showProjectSwitch, setShowProjectSwitch] = useState(false);
+  const [project,    setProject]    = useState(null);
+  const [projects,   setProjects]   = useState([]);
+  const [teamInfo,   setTeamInfo]   = useState(null); // who manages this user
+  const [showMenu,   setShowMenu]   = useState(false);
+  const [showSwitch, setShowSwitch] = useState(false);
   const menuRef   = useRef(null);
   const switchRef = useRef(null);
 
-  const [profile] = useState(() => {
-    const s = localStorage.getItem("profile");
-    return s ? JSON.parse(s) : { name: "Mousam Deb", email: "mousam@example.com", role: "admin", avatarColor: "#3b82f6" };
-  });
+  const isAdmin = user?.role === "admin";
 
   useEffect(() => {
-    fetch("http://localhost:8000/api/projects")
+    if (!token) return;
+    fetch(`${API}/api/projects`, { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.json())
       .then(data => {
-        setProjects(data);
-        setProject(data.find(x => String(x.id) === String(projectId)) || null);
-      });
-  }, [projectId]);
+        const list = Array.isArray(data) ? data : [];
+        setProjects(list);
+        setProject(list.find(x => String(x.id) === String(projectId)) || null);
+      }).catch(() => {});
+  }, [projectId, token]);
+
+  // For non-admins: fetch project members to show "You are working under [admin name]"
+  useEffect(() => {
+    if (!token || isAdmin || !projectId) return;
+    fetch(`${API}/api/projects/${projectId}/members`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(data => {
+        const members = Array.isArray(data) ? data : [];
+        const admin   = members.find(m => m.role === "admin");
+        setTeamInfo(admin || null);
+      }).catch(() => {});
+  }, [projectId, token, isAdmin]);
 
   useEffect(() => {
-    const handler = (e) => {
+    const h = e => {
       if (menuRef.current   && !menuRef.current.contains(e.target))   setShowMenu(false);
-      if (switchRef.current && !switchRef.current.contains(e.target)) setShowProjectSwitch(false);
+      if (switchRef.current && !switchRef.current.contains(e.target)) setShowSwitch(false);
     };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
   }, []);
+
+  const handleLogout = () => {
+    toast.dismiss(); // clear any lingering toasts
+    logout();
+    navigate("/login");
+    // Show toast after navigation so it doesn't bleed into next page
+    setTimeout(() => toast.success("Logged out!"), 100);
+  };
+  const avatarSrc = user?.avatarUrl ? `${API}${user.avatarUrl}` : null;
 
   if (!project) return (
     <div className="flex items-center justify-center h-screen bg-[#f4f5f7] dark:bg-gray-900">
@@ -59,60 +92,74 @@ export default function Layout() {
 
           {/* Project switcher */}
           <div ref={switchRef} className="relative px-3 py-3 border-b border-gray-100 dark:border-gray-700">
-            <button onClick={() => setShowProjectSwitch(!showProjectSwitch)}
-              className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors group">
+            <button onClick={() => setShowSwitch(!showSwitch)}
+              className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
               <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold text-sm flex-shrink-0"
                 style={{ background: project.color }}>{project.icon}</div>
               <div className="flex-1 text-left min-w-0">
                 <p className="text-xs font-bold text-gray-800 dark:text-white truncate">{project.name}</p>
                 <p className="text-[10px] text-gray-400">Software project</p>
               </div>
-              <span className="text-gray-400 text-xs">⌄</span>
+              <span className="text-gray-400 text-xs flex-shrink-0">⌄</span>
             </button>
-
-            {showProjectSwitch && (
+            {showSwitch && (
               <div className="absolute left-3 right-3 top-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl z-50 py-1">
-                <p className="text-[10px] text-gray-400 px-3 py-1.5 uppercase tracking-wider font-semibold">Switch Project</p>
+                <p className="text-[10px] text-gray-400 px-3 py-1.5 uppercase tracking-wider font-semibold">My Projects</p>
                 {projects.map(p => (
-                  <button key={p.id} onClick={() => { navigate(`/projects/${p.id}/summary`); setShowProjectSwitch(false); }}
-                    className={`w-full flex items-center gap-2.5 px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors ${String(p.id) === String(projectId) ? "bg-blue-50 dark:bg-blue-900/20" : ""}`}>
-                    <div className="w-6 h-6 rounded-md flex items-center justify-center text-white text-xs font-bold"
-                      style={{ background: p.color }}>{p.icon}</div>
-                    <span className="text-xs font-medium text-gray-700 dark:text-gray-200 truncate">{p.name}</span>
-                    {String(p.id) === String(projectId) && <span className="ml-auto text-blue-500 text-xs">✓</span>}
+                  <button key={p.id} onClick={() => { navigate(`/projects/${p.id}/summary`); setShowSwitch(false); }}
+                    className={`w-full flex items-center gap-2 px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 text-xs transition-colors ${String(p.id) === String(projectId) ? "bg-blue-50 dark:bg-blue-900/20" : ""}`}>
+                    <div className="w-5 h-5 rounded flex items-center justify-center text-white text-[10px] font-bold" style={{ background: p.color }}>{p.icon}</div>
+                    <span className="font-medium text-gray-700 dark:text-gray-200 truncate">{p.name}</span>
+                    {String(p.id) === String(projectId) && <span className="ml-auto text-blue-500">✓</span>}
                   </button>
                 ))}
                 <div className="border-t border-gray-100 dark:border-gray-700 mt-1 pt-1">
-                  <button onClick={() => { navigate("/projects"); setShowProjectSwitch(false); }}
+                  <button onClick={() => { navigate("/projects"); setShowSwitch(false); }}
                     className="w-full flex items-center gap-2 px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 text-xs text-blue-600 font-medium">
-                    <span>+</span> All Projects
+                    ← All Projects
                   </button>
                 </div>
               </div>
             )}
           </div>
 
+          {/* "You're working under" banner for non-admins */}
+          {!isAdmin && teamInfo && (
+            <div className="mx-3 mt-3 px-3 py-2.5 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-100 dark:border-blue-800">
+              <p className="text-[9px] font-semibold text-blue-400 uppercase tracking-wider mb-1">Your Team Lead</p>
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded-full bg-blue-600 flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0">
+                  {teamInfo.name?.[0]?.toUpperCase()}
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold text-gray-800 dark:text-white truncate">{teamInfo.name}</p>
+                  <p className="text-[9px] text-blue-500 capitalize">{teamInfo.role}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Nav */}
           <nav className="flex-1 px-2 py-3 space-y-0.5">
-            {NAV.map(item => (
+            {NAV.filter(item => !item.adminOnly || isAdmin).map(item => (
               <NavLink key={item.key} to={`/projects/${projectId}/${item.key}`}
                 className={({ isActive }) =>
                   `flex items-center gap-2.5 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
                     isActive ? "bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400"
-                    : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"}`}>
-                <span className="text-base">{item.icon}</span>{item.label}
+                             : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"}`}>
+                <span>{item.icon}</span>{item.label}
               </NavLink>
             ))}
           </nav>
 
-          {/* Settings at bottom of sidebar */}
+          {/* Settings */}
           <div className="px-2 py-3 border-t border-gray-100 dark:border-gray-700">
             <NavLink to={`/projects/${projectId}/settings`}
               className={({ isActive }) =>
                 `flex items-center gap-2.5 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
                   isActive ? "bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400"
-                  : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"}`}>
-              <span className="text-base">⚙️</span> Settings
+                           : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"}`}>
+              <span>⚙️</span> Settings
             </NavLink>
           </div>
         </aside>
@@ -134,48 +181,47 @@ export default function Layout() {
                 <input placeholder="Search..." className="pl-8 pr-3 py-1.5 border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg text-xs w-48 focus:outline-none focus:border-blue-400"/>
               </div>
 
-              {/* Avatar dropdown */}
+              {/* 🔔 Notification Bell */}
+              <NotificationBell/>
+
+              {/* Avatar */}
               <div ref={menuRef} className="relative">
                 <button onClick={() => setShowMenu(!showMenu)}
-                  className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold hover:opacity-90 transition-opacity ring-2 ring-white dark:ring-gray-800"
-                  style={{ background: profile.avatarColor || "#3b82f6" }}>
-                  {profile.name[0].toUpperCase()}
+                  className="flex items-center gap-2 px-1 py-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                  {avatarSrc
+                    ? <img src={avatarSrc} alt={user?.name} className="w-7 h-7 rounded-full object-cover ring-2 ring-white dark:ring-gray-800"/>
+                    : <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold ring-2 ring-white dark:ring-gray-800"
+                        style={{ background: user?.avatarColor || "#3b82f6" }}>{user?.name?.[0]?.toUpperCase()}</div>
+                  }
                 </button>
 
                 {showMenu && (
                   <div className="absolute right-0 top-10 w-64 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-2xl z-50 overflow-hidden">
                     <div className="px-4 py-3 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border-b border-gray-100 dark:border-gray-700">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold"
-                          style={{ background: profile.avatarColor || "#3b82f6" }}>
-                          {profile.name[0].toUpperCase()}
-                        </div>
-                        <div>
-                          <p className="text-sm font-bold text-gray-800 dark:text-white">{profile.name}</p>
-                          <p className="text-xs text-gray-500 dark:text-gray-400">{profile.email}</p>
-                          <span className="text-[10px] bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded-full font-semibold capitalize">{profile.role}</span>
+                        {avatarSrc
+                          ? <img src={avatarSrc} className="w-10 h-10 rounded-full object-cover"/>
+                          : <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold" style={{ background: user?.avatarColor || "#3b82f6" }}>{user?.name?.[0]?.toUpperCase()}</div>
+                        }
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-bold text-gray-800 dark:text-white truncate">{user?.name}</p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{user?.email}</p>
+                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full capitalize ${ROLE_BADGE[user?.role] || ""}`}>{user?.role}</span>
                         </div>
                       </div>
                     </div>
                     <div className="py-1">
                       <button onClick={() => { navigate("/projects"); setShowMenu(false); }}
-                        className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-700 text-sm text-gray-700 dark:text-gray-200 transition-colors">
-                        🏠 All Projects
-                      </button>
+                        className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-700 text-sm text-gray-700 dark:text-gray-200 transition-colors">🏠 All Projects</button>
                       <button onClick={() => { navigate(`/projects/${projectId}/settings`); setShowMenu(false); }}
-                        className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-700 text-sm text-gray-700 dark:text-gray-200 transition-colors">
-                        ⚙️ Settings
-                      </button>
+                        className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-700 text-sm text-gray-700 dark:text-gray-200 transition-colors">⚙️ Settings</button>
                       <button onClick={() => { toggle(); setShowMenu(false); }}
                         className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-700 text-sm text-gray-700 dark:text-gray-200 transition-colors">
                         {dark ? "☀️" : "🌙"} {dark ? "Light Mode" : "Dark Mode"}
-                        <span className="ml-auto text-xs text-gray-400">{dark ? "On" : "Off"}</span>
                       </button>
                       <div className="border-t border-gray-100 dark:border-gray-700 my-1"/>
-                      <button onClick={() => { localStorage.clear(); toast.success("Logged out!"); navigate("/projects"); setShowMenu(false); }}
-                        className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-red-50 dark:hover:bg-red-900/20 text-sm text-red-600 transition-colors">
-                        🚪 Log out
-                      </button>
+                      <button onClick={handleLogout}
+                        className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-red-50 dark:hover:bg-red-900/20 text-sm text-red-500 font-medium transition-colors">🚪 Log out</button>
                     </div>
                   </div>
                 )}
@@ -183,9 +229,7 @@ export default function Layout() {
             </div>
           </header>
 
-          <main className="flex-1 overflow-y-auto dark:bg-gray-900">
-            <Outlet/>
-          </main>
+          <main className="flex-1 overflow-y-auto dark:bg-gray-900"><Outlet/></main>
         </div>
       </div>
     </div>

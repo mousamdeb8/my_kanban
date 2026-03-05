@@ -1,54 +1,158 @@
 const express = require("express");
 const router  = express.Router();
-const { User } = require("../models");
+const jwt     = require("jsonwebtoken");
+const { User, AuthUser } = require("../models");
 
-// GET users scoped by project_id
+const getDecoded = (req) => {
+  try {
+    const h = req.headers.authorization;
+    if (!h) return null;
+    return jwt.verify(h.split(" ")[1], process.env.JWT_SECRET);
+  } catch { return null; }
+};
+
+const requireAdmin = (req, res, next) => {
+  const d = getDecoded(req);
+  if (!d) return res.status(401).json({ message: "Not authenticated" });
+  if (d.role !== "admin") return res.status(403).json({ message: "Admin only" });
+  req.decoded = d;
+  next();
+};
+
+// ─────────────────────────────────────────────────────────────────
+// GET /api/users/assignable?project_id=x
+router.get("/assignable", async (req, res) => {
+  const decoded = getDecoded(req);
+  if (!decoded) return res.status(401).json({ message: "Not authenticated" });
+
+  try {
+    const projectId = Number(req.query.project_id);
+
+    // Always fetch fresh from auth_users — this is the source of truth for roles
+    const allAuthUsers = await AuthUser.findAll({
+      attributes: ["id", "name", "email", "role", "avatarColor", "department"],
+    });
+    const authUsers = allAuthUsers.filter(au => au.isActive !== false);
+
+    // Existing users for this project
+    const existingUsers = await User.findAll({
+      where: { project_id: projectId },
+      attributes: ["id", "name", "email", "role"],
+    });
+    const existingEmailMap = new Map(existingUsers.map(u => [u.email.toLowerCase(), u]));
+
+    // Sync all auth_users into users table — insert missing, UPDATE existing roles
+    for (const au of authUsers) {
+      const key = au.email.toLowerCase();
+      const freshRole = (au.role || "member").toLowerCase();
+
+      if (!existingEmailMap.has(key)) {
+        // Insert new
+        try {
+          await User.create({
+            name:       au.name,
+            email:      au.email,
+            role:       freshRole,
+            department: au.department || null,
+            project_id: projectId,
+          });
+        } catch (e) {
+          if (!e.message.includes("Duplicate") && !e.message.includes("unique") && !e.message.includes("ER_DUP_ENTRY")) {
+            console.warn("Auto-sync insert warning:", e.message);
+          }
+        }
+      } else {
+        // Update role if it changed — auth_users is the source of truth
+        const existingUser = existingEmailMap.get(key);
+        if ((existingUser.role || "").toLowerCase() !== freshRole) {
+          try {
+            await User.update({ role: freshRole }, { where: { email: au.email, project_id: projectId } });
+          } catch (e) {
+            console.warn("Auto-sync role update warning:", e.message);
+          }
+        }
+      }
+    }
+
+    // Re-fetch with fresh roles
+    const finalUsers = await User.findAll({
+      where: { project_id: projectId },
+      attributes: ["id", "name", "email", "role", "department"],
+      order: [["id", "ASC"]],
+    });
+
+    // Enrich with avatarColor from auth_users
+    const authMap = new Map(authUsers.map(au => [au.email.toLowerCase(), au]));
+    const result  = finalUsers.map(u => ({
+      id:          u.id,
+      name:        u.name,
+      email:       u.email,
+      role:        authMap.get(u.email.toLowerCase())?.role?.toLowerCase() || u.role, // always use auth_users role
+      department:  u.department,
+      avatarColor: authMap.get(u.email.toLowerCase())?.avatarColor || null,
+      authId:      authMap.get(u.email.toLowerCase())?.id || null, // expose auth_users.id for canReview check
+    }));
+
+    res.json(result);
+  } catch (err) {
+    console.error("GET /assignable error:", err.message);
+    res.status(500).json({ message: "Failed", error: err.message });
+  }
+});
+
+// GET /api/users?project_id=x  — Summary team list
 router.get("/", async (req, res) => {
   try {
     const where = {};
     if (req.query.project_id) where.project_id = Number(req.query.project_id);
-    res.json(await User.findAll({ where }));
+    const users = await User.findAll({
+      where,
+      attributes: ["id", "name", "email", "role", "department", "project_id"],
+      order: [["id", "ASC"]],
+    });
+    res.json(users);
   } catch (err) {
-    console.error("GET /users error:", err);
-    res.status(500).json({ message: "Failed to fetch users", error: err.message });
+    res.status(500).json({ message: "Failed", error: err.message });
   }
 });
 
-// POST create user
-router.post("/", async (req, res) => {
+// POST /api/users — admin adds member manually from Summary
+router.post("/", requireAdmin, async (req, res) => {
   try {
-    const user = await User.create(req.body);
+    const { name, email, role, department, project_id } = req.body;
+    if (!name || !email) return res.status(400).json({ message: "Name and email required" });
+    const user = await User.create({
+      name, email,
+      role:       (role || "member").toLowerCase(),
+      department: department || null,
+      project_id,
+    });
     res.status(201).json(user);
   } catch (err) {
-    console.error("POST /users error:", err);
-    res.status(500).json({ message: "Failed to create user", error: err.message });
+    if (err.name === "SequelizeUniqueConstraintError")
+      return res.status(400).json({ message: "This person is already in this project" });
+    res.status(500).json({ message: err.message });
   }
 });
 
-// PUT update user
-router.put("/:id", async (req, res) => {
+// PUT /api/users/:id
+router.put("/:id", requireAdmin, async (req, res) => {
   try {
     const user = await User.findByPk(req.params.id);
     if (!user) return res.status(404).json({ message: "Not found" });
     await user.update(req.body);
     res.json(user);
-  } catch (err) {
-    console.error("PUT /users error:", err);
-    res.status(500).json({ message: "Failed to update", error: err.message });
-  }
+  } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
-// DELETE user
-router.delete("/:id", async (req, res) => {
+// DELETE /api/users/:id
+router.delete("/:id", requireAdmin, async (req, res) => {
   try {
     const user = await User.findByPk(req.params.id);
     if (!user) return res.status(404).json({ message: "Not found" });
     await user.destroy();
     res.json({ message: "Deleted" });
-  } catch (err) {
-    console.error("DELETE /users error:", err);
-    res.status(500).json({ message: "Failed to delete", error: err.message });
-  }
+  } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
 module.exports = router;

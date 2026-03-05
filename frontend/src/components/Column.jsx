@@ -2,73 +2,73 @@ import { useDroppable } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import TaskCard from "./TaskCard";
 
-export default function Column({ id, name, tasks, onEditTask, onCreateTask }) {
-  const { setNodeRef } = useDroppable({ id });
+const COUNT_COLORS = {
+  todo:       "bg-blue-100 text-blue-700",
+  inprogress: "bg-yellow-100 text-yellow-700",
+  inreview:   "bg-purple-100 text-purple-700",
+  done:       "bg-green-100 text-green-700",
+};
 
-  const headerColors = {
-    todo: "border-t-blue-500",
-    inprogress: "border-t-yellow-500",
-    inreview: "border-t-purple-500",
-    done: "border-t-green-500",
-  };
+const DOT_COLORS = {
+  todo:       "bg-blue-500",
+  inprogress: "bg-yellow-500",
+  inreview:   "bg-purple-500",
+  done:       "bg-green-500",
+};
 
-  const dotColors = {
-    todo: "bg-blue-500",
-    inprogress: "bg-yellow-500",
-    inreview: "bg-purple-500",
-    done: "bg-green-500",
-  };
+export default function Column({ id, name, tasks, canCreate, onEditTask, onQuickCreate }) {
+  const { setNodeRef, isOver } = useDroppable({ id });
 
   return (
-    <div
-      ref={setNodeRef}
-      className={`w-72 bg-[#f4f5f7] rounded-sm border-t-[3px] ${headerColors[id]} flex flex-col h-[80vh]`}
-    >
-      {/* Column Header */}
-      <div className="px-3 py-2 flex items-center justify-between">
+    <div className={`w-72 flex-shrink-0 flex flex-col rounded-2xl border transition-all ${
+      isOver
+        ? "border-blue-400 bg-blue-50/50 dark:bg-blue-900/10"
+        : "border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50"
+    }`}>
+      {/* Column header */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700">
         <div className="flex items-center gap-2">
-          <span className={`w-2 h-2 rounded-full ${dotColors[id]}`} />
-          <span className="text-xs font-bold text-gray-600 uppercase tracking-wide">
-            {name}
-          </span>
-          <span className="text-xs font-semibold text-gray-400 bg-gray-200 rounded-full px-2 py-0.5">
-            {tasks.length}
-          </span>
+          <div className={`w-2 h-2 rounded-full ${DOT_COLORS[id]}`}/>
+          <span className="text-xs font-bold text-gray-600 dark:text-gray-300 tracking-widest uppercase">{name}</span>
         </div>
-        <button className="text-gray-400 hover:text-gray-600 text-lg leading-none">+</button>
+        <div className="flex items-center gap-2">
+          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${COUNT_COLORS[id]}`}>{tasks.length}</span>
+          {canCreate && (
+            <button onClick={onQuickCreate}
+              className="w-5 h-5 flex items-center justify-center rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors text-sm font-bold">
+              +
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* Cards */}
-      <div className="px-2 pb-2 flex-1 overflow-y-auto">
-        <SortableContext
-          items={tasks?.map((t) => t.id) || []}
-          strategy={verticalListSortingStrategy}
-        >
-          <div className="flex flex-col gap-2">
-            {tasks.length === 0 ? (
-              <p className="text-gray-400 text-xs italic px-2 py-3">No tasks</p>
-            ) : (
-              tasks.map((task) => (
-                <TaskCard
-                  key={task.id}
-                  task={task}
-                  assigneeName={task.assigneeName || "Unassigned"}
-                  onClick={() => onEditTask(task)}
-                />
-              ))
-            )}
-          </div>
+      {/* Tasks */}
+      <div ref={setNodeRef} className="flex-1 p-3 space-y-2.5 overflow-y-auto min-h-[200px] max-h-[calc(100vh-280px)]">
+        <SortableContext items={tasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
+          {tasks.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-20 text-gray-300 dark:text-gray-600">
+              <p className="text-xs">No tasks</p>
+            </div>
+          ) : (
+            tasks.map(task => (
+              <TaskCard
+                key={task.id}
+                task={task}
+                assigneeName={task.assigneeName || "Unassigned"}
+                onClick={() => onEditTask(task)}
+              />
+            ))
+          )}
         </SortableContext>
       </div>
 
-      {/* + Create at bottom */}
-      <button
-        onClick={() => onCreateTask && onCreateTask(id)}
-        className="flex items-center gap-1 text-xs text-gray-500 hover:text-blue-600 hover:bg-blue-50 px-3 py-2 transition-colors rounded-b-sm"
-      >
-        <span className="text-base leading-none">+</span>
-        <span>Create issue</span>
-      </button>
+      {/* Quick create footer */}
+      {canCreate && (
+        <button onClick={onQuickCreate}
+          className="flex items-center gap-2 px-4 py-2.5 text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors rounded-b-2xl border-t border-gray-200 dark:border-gray-700">
+          <span className="text-sm font-bold">+</span> Create issue
+        </button>
+      )}
     </div>
   );
 }
