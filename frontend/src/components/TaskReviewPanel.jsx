@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
 
-const API = "http://localhost:8000";
+const API = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 const VERDICTS = [
   { value: "approved",  label: "Approved",          icon: "✅", color: "text-green-700", bg: "bg-green-50 dark:bg-green-900/20",   border: "border-green-400",  btn: "bg-green-600 hover:bg-green-700",  desc: "Work is complete and correct"            },

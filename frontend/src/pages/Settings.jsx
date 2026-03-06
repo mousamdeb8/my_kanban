@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useAuth } from "../context/AuthContext";
 import toast from "react-hot-toast";
 
-const API = "http://localhost:8000";
+const API = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 const AVATAR_COLORS = [
   "#3b82f6","#8b5cf6","#ec4899","#22c55e","#ef4444","#f97316","#eab308","#14b8a6"

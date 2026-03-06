@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import toast, { Toaster } from "react-hot-toast";
 
-const API = "http://localhost:8000";
+const API = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 // Robust isActive check — handles TINYINT 0, boolean false, and null
 const isActiveUser = (a) => a.isActive !== 0 && a.isActive !== false && a.isActive !== null;

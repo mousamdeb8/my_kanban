@@ -8,7 +8,7 @@ import Column from "../components/Column";
 import CreateTaskModal from "../components/CreateTaskModal";
 import EditTaskModal from "../components/EditTaskModal";
 
-const API = "http://localhost:8000";
+const API = import.meta.env.VITE_API_URL || "http://localhost:8000";
 const COLUMNS = [
   { id: "todo",       name: "TO DO",       dot: "#3b82f6" },
   { id: "inprogress", name: "IN PROGRESS", dot: "#f59e0b" },
