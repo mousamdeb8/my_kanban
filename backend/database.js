@@ -13,7 +13,7 @@ const sequelize = new Sequelize(
     dialectOptions: process.env.DB_SSL === "true"
       ? {
           ssl: {
-            rejectUnauthorized: true,
+            rejectUnauthorized: false,
           },
         }
       : {},
