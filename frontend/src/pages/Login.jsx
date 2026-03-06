@@ -17,7 +17,7 @@ export default function Login() {
     if (!email || !password) return toast.error("Please fill in all fields");
     setLoading(true);
     try {
-      const API = import.meta.env.VITE_API_URL || "http://localhost:8000";
+      const API = import.meta.env.VITE_API_URL || "https://my-kanban-frontend.onrender.com";
       const res = await fetch(`${API}/api/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
