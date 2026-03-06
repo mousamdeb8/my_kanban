@@ -54,7 +54,7 @@ export default function Timeline() {
   const scrollRef = useRef(null);
 
   useEffect(() => {
-    fetch(`http://localhost:8000/api/tasks?project_id=${projectId}`, { headers: { "Cache-Control": "no-store" } })
+    fetch(`${import.meta.env.VITE_API_URL || "http://localhost:8000"}/api/tasks?project_id=${projectId}`, { headers: { "Cache-Control": "no-store" } })
       .then(r => r.json())
       .then(data => { setTasks(data); setLoading(false); })
       .catch(() => setLoading(false));

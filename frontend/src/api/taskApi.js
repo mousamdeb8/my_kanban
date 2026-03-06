@@ -1,7 +1,7 @@
 import axios from "axios";
 import { ConnectionRefusedError } from "sequelize";
 
-const API = "http://localhost:8000/api/tasks"; // ✅ correct backend URL
+const API = (import.meta.env.VITE_API_URL || "http://localhost:8000") + "/api/tasks"; // ✅ correct backend URL
 
 // Get all tasks
 export const fetchTasks = async () => {
