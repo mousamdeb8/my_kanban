@@ -78,9 +78,20 @@ router.post("/send-otp", async (req, res) => {
     const expiry = Date.now() + 10 * 60 * 1000;
     otpStore.set(email, { otp, expiry, verified: false });
     console.log(`📧 OTP for ${email}: ${otp}`);
-    if (emailService.sendOtpEmail) await emailService.sendOtpEmail({ email, otp });
+
+    // Try to send email but never crash if it fails
+    if (emailService.sendOtpEmail) {
+      try {
+        await emailService.sendOtpEmail({ email, otp });
+        console.log(`📧 OTP email sent to ${email}`);
+      } catch (emailErr) {
+        console.warn(`📧 Email failed (OTP still valid): ${emailErr.message}`);
+      }
+    }
+
     res.json({ message: "OTP sent! Check your email." });
   } catch (err) {
+    console.error("send-otp error:", err.message);
     res.status(500).json({ message: "Failed to send OTP: " + err.message });
   }
 });
