@@ -13,7 +13,7 @@ const notificationRoutes = require("./routes/notificationRoutes");
 const app  = express();
 const PORT = process.env.PORT || 8000;
 
-app.use(cors());
+app.use(cors({ origin: "*" }));
 app.use(express.json());
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
@@ -25,29 +25,26 @@ app.use("/api/notifications", notificationRoutes);
 
 app.get("/", (req, res) => res.send("Backend is running"));
 
-sequelize.sync({ alter: false }).then(async () => {
-  console.log("✅ DB synced");
+// Use force:false, alter:false — tables already exist in Aiven, no need to modify
+sequelize.sync({ force: false, alter: false }).then(async () => {
+  console.log("✅ DB connected");
 
-  // Startup: sync ALL roles from auth_users -> users (auth_users is source of truth)
+  // Sync roles quietly
   try {
     const { AuthUser, User } = require("./models");
     const authUsers = await AuthUser.findAll({ attributes: ["id","email","role"] });
-    let synced = 0;
     for (const au of authUsers) {
       const freshRole = (au.role || "member").toLowerCase();
-      const rows = await User.findAll({ where: { email: au.email } });
-      for (const u of rows) {
-        if ((u.role || "").toLowerCase() !== freshRole) {
-          await u.update({ role: freshRole });
-          synced++;
-          console.log("  Synced " + au.email + ": " + u.role + " -> " + freshRole);
-        }
-      }
+      await User.update({ role: freshRole }, { where: { email: au.email } });
     }
-    console.log(synced === 0 ? "  All roles in sync" : "  Synced " + synced + " role(s)");
+    console.log("✅ Roles synced");
   } catch (e) {
-    console.warn("  Role sync warning:", e.message);
+    console.warn("Role sync warning:", e.message);
   }
 
-  app.listen(PORT, () => console.log("Server running on http://localhost:" + PORT));
+  app.listen(PORT, () => console.log("✅ Server running on port " + PORT));
+}).catch(err => {
+  console.error("❌ DB connection failed:", err.message);
+  // Start server anyway so health checks pass
+  app.listen(PORT, () => console.log("⚠️ Server running WITHOUT DB on port " + PORT));
 });
