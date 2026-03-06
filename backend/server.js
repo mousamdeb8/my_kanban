@@ -25,7 +25,7 @@ app.use("/api/notifications", notificationRoutes);
 
 app.get("/", (req, res) => res.send("Backend is running"));
 
-sequelize.sync({ alter: true }).then(async () => {
+sequelize.sync({ alter: false }).then(async () => {
   console.log("✅ DB synced");
 
   // Startup: sync ALL roles from auth_users -> users (auth_users is source of truth)
