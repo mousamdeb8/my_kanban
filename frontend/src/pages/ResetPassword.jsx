@@ -16,14 +16,14 @@ export default function ResetPassword() {
   const strength = password.length === 0 ? 0 : password.length < 6 ? 1 : password.length < 10 ? 2 : 3;
 
   const handleSubmit = async () => {
-    if (!password)              return toast.error("Enter a new password"); 
+    if (!password)              return toast.error("Enter a new password");
     if (password.length < 6)   return toast.error("Password must be 6+ characters");
     if (password !== confirm)   return toast.error("Passwords don't match");
     if (!token)                 return toast.error("Invalid reset link");
 
     setLoading(true);
     try {
-      const res = await fetch((import.meta.env.VITE_API_URL || "http://localhost:8000")/api/auth/reset-password", {
+      const res = await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:8000"}/api/auth/reset-password`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token, password }),
       });
