@@ -14,17 +14,31 @@ let transporter = null;
 try {
   const nodemailer = require("nodemailer");
   if (process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD) {
-    transporter = nodemailer.createTransport({
+    // Try with hostname first
+    const transportConfig = {
       host: "smtp.gmail.com",
       port: 587,
       secure: false,
-      family: 4, // Force IPv4 — Render free tier blocks IPv6
       auth: {
         user: process.env.GMAIL_USER,
         pass: process.env.GMAIL_APP_PASSWORD,
       },
-      tls: { rejectUnauthorized: false },
-    });
+      // Force IPv4 - critical for Render free tier
+      family: 4,
+      dnsTimeout: 10000,
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 30000,
+      tls: { 
+        rejectUnauthorized: false,
+        minVersion: 'TLSv1.2'
+      },
+      // Additional IPv4 enforcement
+      debug: false,
+      logger: false,
+    };
+    
+    transporter = nodemailer.createTransport(transportConfig);
     console.log("📧 Email service ready:", process.env.GMAIL_USER);
   } else {
     console.log("📧 Email service: not configured");
@@ -35,13 +49,47 @@ try {
 
 async function send({ to, subject, html }) {
   if (!transporter) {
-    console.log(`📧 [DEV EMAIL] To: ${to}\nSubject: ${subject}\n${html.replace(/<[^>]+>/g, "").slice(0, 300)}...`);
+    console.log(`📧 [DEV MODE] Email service not configured - would send to: ${to}`);
+    console.log(`📧 Subject: ${subject}`);
+    console.log(`📧 Set GMAIL_USER and GMAIL_APP_PASSWORD to enable email delivery`);
     return;
   }
-  await transporter.sendMail({
-    from: `"Kanban Workspace" <${process.env.GMAIL_USER}>`,
-    to, subject, html,
-  });
+  
+  // Retry logic for network issues
+  const maxRetries = 3;
+  let lastError;
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const info = await transporter.sendMail({
+        from: `"Kanban Workspace" <${process.env.GMAIL_USER}>`,
+        to, 
+        subject, 
+        html,
+      });
+      console.log(`✅ Email sent successfully to: ${to} (attempt ${attempt})`);
+      return info;
+    } catch (error) {
+      lastError = error;
+      console.error(`❌ Email attempt ${attempt}/${maxRetries} failed to ${to}:`, error.message);
+      
+      // Don't retry on auth errors
+      if (error.message.includes('authentication') || error.message.includes('Invalid login')) {
+        throw error;
+      }
+      
+      // Wait before retry (exponential backoff)
+      if (attempt < maxRetries) {
+        const waitTime = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
+        console.log(`⏳ Retrying in ${waitTime}ms...`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+      }
+    }
+  }
+  
+  // All retries failed
+  console.error(`❌ All ${maxRetries} email attempts failed to ${to}`);
+  throw lastError;
 }
 
 
