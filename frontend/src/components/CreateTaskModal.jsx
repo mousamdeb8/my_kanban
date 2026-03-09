@@ -49,37 +49,44 @@ export default function CreateTaskModal({ projectId, token, user, onClose, onCre
   const [tag,          setTag]          = useState("");
   const [assignedById, setAssignedById] = useState("");
   const [assignToId,   setAssignToId]   = useState("");
-  const [allUsers,     setAllUsers]     = useState([]);
+  const [assignerOptions, setAssignerOptions] = useState([]); // Admin + Developer only
+  const [assigneeOptions, setAssigneeOptions] = useState([]); // Everyone
   const [loading,      setLoading]      = useState(false);
 
   const isIntern  = user?.role === "intern";
   const canAssign = user?.role === "admin" || user?.role === "developer";
 
-  // Split users into two groups for the two dropdowns
-  const assignerOptions = allUsers.filter(u =>
-    ["admin","developer"].includes((u.role || "").toLowerCase())
-  );
-  const assigneeOptions = allUsers; // everyone can be assigned work
-
+  // UPDATED: Fetch ALL active users from auth_users table (not project-specific)
   useEffect(() => {
     if (!canAssign) return;
-    fetch(`${API}/api/users/assignable?project_id=${projectId}`, {
+    
+    // NEW ENDPOINT: /api/users/active returns {assigners, assignees}
+    fetch(`${API}/api/users/active`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(r => r.json())
-      .then(d => {
-        const list = Array.isArray(d) ? d : [];
-        setAllUsers(list);
-        // Default "Assigned By" to the currently logged-in user's users-table row
-        const me = list.find(u => u.email?.toLowerCase() === user?.email?.toLowerCase());
-        if (me) setAssignedById(String(me.id));
+      .then(data => {
+        // Backend returns: {assigners: [...], assignees: [...]}
+        if (data.assigners && data.assignees) {
+          setAssignerOptions(data.assigners); // Only admin + developer
+          setAssigneeOptions(data.assignees); // Everyone (admin, dev, member, intern)
+          
+          // Default "Assigned By" to the currently logged-in user
+          const me = data.assigners.find(u => u.email?.toLowerCase() === user?.email?.toLowerCase());
+          if (me) {
+            setAssignedById(String(me.id)); // This is auth_users.id
+          }
+        }
       })
-      .catch(() => {});
-  }, [projectId, token, canAssign, user?.email]);
+      .catch(err => {
+        console.error("Failed to fetch active users:", err);
+        toast.error("Failed to load users");
+      });
+  }, [token, canAssign, user?.email]);
 
-  const selectedType    = TASK_TYPES.find(t => t.value === taskType);
-  const selectedAssigner = allUsers.find(u => String(u.id) === String(assignedById));
-  const selectedAssignee = allUsers.find(u => String(u.id) === String(assignToId));
+  const selectedAssigner = assignerOptions.find(u => String(u.id) === String(assignedById));
+  const selectedAssignee = assigneeOptions.find(u => String(u.id) === String(assignToId));
+  const selectedType = TASK_TYPES.find(t => t.value === taskType);
 
   const headerTitle = title.trim() || "Create Task";
   const headerSub   = title.trim()
@@ -100,7 +107,9 @@ export default function CreateTaskModal({ projectId, token, user, onClose, onCre
         tag:         tag.trim() || null,
         taskType,
         project_id:  Number(projectId),
-        user_id:     canAssign ? (Number(assignToId) || null) : null,
+        // IMPORTANT: Send the auth_users.id as assignToUserId
+        // Backend will handle creating the users table record
+        assignToUserId: canAssign ? (Number(assignToId) || null) : null,
       });
       onClose();
     } finally { setLoading(false); }
@@ -152,15 +161,15 @@ export default function CreateTaskModal({ projectId, token, user, onClose, onCre
             <input type="text" value={title} onChange={e => setTitle(e.target.value)}
               placeholder={`${selectedType?.label} title...`} autoFocus
               onKeyDown={e => e.key === "Enter" && handleSubmit()}
-              className="w-full border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-blue-400"/>
+              className="w-full border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-blue-400"/>
           </div>
 
           {/* Description */}
           <div>
             <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider block mb-1.5">Description</label>
-            <textarea value={description} onChange={e => setDescription(e.target.value)} rows={2}
+            <textarea value={description} onChange={e => setDescription(e.target.value)} rows={3}
               placeholder="What needs to be done?"
-              className="w-full border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-blue-400 resize-none"/>
+              className="w-full border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-xs resize-none focus:outline-none focus:border-blue-400"/>
           </div>
 
           {/* Priority + Status */}

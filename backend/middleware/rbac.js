@@ -1,11 +1,10 @@
-/**
+/*
  * Role-Based Access Control middleware
- *
  * Permissions matrix:
  *  admin     → everything
- *  developer → create/edit tasks, view all, cannot delete projects/users
+ *  developer → create/edit tasks, view all, cannot delete projects/users, assign task to some intern . 
  *  member    → view everything, update task status only, no create/delete
- *  intern    → view + create own tasks + update own tasks, no delete
+ *  intern    → view + create own tasks , no delete
  */
 
 const jwt = require("jsonwebtoken");

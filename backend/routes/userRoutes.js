@@ -20,6 +20,54 @@ const requireAdmin = (req, res, next) => {
 };
 
 // ─────────────────────────────────────────────────────────────────
+// NEW: GET /api/users/active — Returns ALL active users from auth_users
+// Returns separate lists: assigners (admin+developer) and assignees (everyone)
+router.get("/active", async (req, res) => {
+  const decoded = getDecoded(req);
+  if (!decoded) return res.status(401).json({ message: "Not authenticated" });
+
+  try {
+    // Fetch ALL active users from auth_users table
+    const activeUsers = await AuthUser.findAll({
+      where: { 
+        isActive: 1  // Only active users
+      },
+      attributes: ["id", "name", "email", "role", "avatarColor", "avatarUrl", "department"],
+      order: [["name", "ASC"]],
+    });
+
+    // Format all users
+    const allUsers = activeUsers.map(user => ({
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      department: user.department,
+      avatarColor: user.avatarColor,
+      avatarUrl: user.avatarUrl,
+    }));
+
+    // Split into two groups
+    // Assigners: Only admin and developer (who can create/assign tasks)
+    const assigners = allUsers.filter(u => 
+      ["admin", "developer"].includes((u.role || "").toLowerCase())
+    );
+
+    // Assignees: Everyone (admin, developer, member, intern - all can be assigned work)
+    const assignees = allUsers;
+
+    // Return both lists
+    res.json({
+      assigners,  // For "Assigned By" dropdown
+      assignees   // For "Assign To" dropdown
+    });
+  } catch (err) {
+    console.error("GET /active error:", err.message);
+    res.status(500).json({ message: "Failed to fetch active users", error: err.message });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────
 // GET /api/users/assignable?project_id=x
 router.get("/assignable", async (req, res) => {
   const decoded = getDecoded(req);

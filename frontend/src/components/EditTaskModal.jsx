@@ -81,7 +81,8 @@ export default function EditTaskModal({ task, token, user, canEdit, canDelete, o
   const [tag,          setTag]          = useState(task.tag || "");
   const [assignedById, setAssignedById] = useState("");
   const [assignToId,   setAssignToId]   = useState(task.user && task.user.id ? String(task.user.id) : "");
-  const [allUsers,     setAllUsers]     = useState([]);
+  const [assignerOptions, setAssignerOptions] = useState([]); // Admin + Developer only
+  const [assigneeOptions, setAssigneeOptions] = useState([]); // Everyone
   const [loading,      setLoading]      = useState(false);
   const [confirmDel,   setConfirmDel]   = useState(false);
 
@@ -111,21 +112,36 @@ export default function EditTaskModal({ task, token, user, canEdit, canDelete, o
 
   const hdrs = { "Content-Type": "application/json", Authorization: "Bearer " + token };
 
+  // UPDATED: Fetch ALL active users from auth_users table (not project-specific)
   useEffect(() => {
     if (!token) return;
-    fetch(API + "/api/users/assignable?project_id=" + task.project_id, {
+    
+    // NEW ENDPOINT: /api/users/active returns {assigners, assignees}
+    fetch(API + "/api/users/active", {
       headers: { Authorization: "Bearer " + token },
     })
       .then(r => r.json())
-      .then(d => {
-        if (!Array.isArray(d)) return;
-        setAllUsers(d);
-        const me = d.find(u2 => u2.email && user && u2.email.toLowerCase() === user.email.toLowerCase());
-        if (me) setAssignedById(String(me.id));
-        if (task.user && task.user.id) setAssignToId(String(task.user.id));
+      .then(data => {
+        // Backend returns: {assigners: [...], assignees: [...]}
+        if (data.assigners && data.assignees) {
+          setAssignerOptions(data.assigners); // Only admin + developer
+          setAssigneeOptions(data.assignees); // Everyone (admin, dev, member, intern)
+          
+          // Set current user as default assigner (auth_users.id)
+          const me = data.assigners.find(u2 => u2.email && user && u2.email.toLowerCase() === user.email.toLowerCase());
+          if (me) setAssignedById(String(me.id));
+          
+          // If task is assigned, find the user by email (since we're now using auth_users)
+          if (task.user && task.user.email) {
+            const assignedUser = data.assignees.find(u2 => u2.email && u2.email.toLowerCase() === task.user.email.toLowerCase());
+            if (assignedUser) setAssignToId(String(assignedUser.id));
+          }
+        }
       })
-      .catch(() => {});
-  }, [task.project_id, token]);
+      .catch(err => {
+        console.error("Failed to fetch active users:", err);
+      });
+  }, [token, user?.email]);
 
   useEffect(() => {
     if (!canReview || reviewsLoaded) return;
@@ -139,11 +155,10 @@ export default function EditTaskModal({ task, token, user, canEdit, canDelete, o
     if (canSubmitReview || (canReview && wasReviewed)) setActiveTab("review");
   }, [canSubmitReview, canReview, wasReviewed]);
 
-  const assignerOptions  = allUsers.filter(u2 => ["admin","developer"].includes((u2.role || "").toLowerCase()));
-  const assigneeOptions  = allUsers;
+  // Use the pre-filtered lists from backend (no need to filter here)
   const selectedType     = TASK_TYPES.find(t => t.value === taskType) || TASK_TYPES[0];
-  const selectedAssigner = allUsers.find(u2 => String(u2.id) === assignedById);
-  const selectedAssignee = allUsers.find(u2 => String(u2.id) === assignToId);
+  const selectedAssigner = assignerOptions.find(u2 => String(u2.id) === assignedById);
+  const selectedAssignee = assigneeOptions.find(u2 => String(u2.id) === assignToId);
   const totalRejections  = reviews.filter(r => r.verdict === "needs_fix" || r.verdict === "partial").length;
   const sv               = VERDICTS.find(v => v.value === verdict);
 
@@ -159,7 +174,8 @@ export default function EditTaskModal({ task, token, user, canEdit, canDelete, o
         dueDate:  dueDate || null,
         tag:      tag.trim() || null,
         taskType,
-        user_id:  isAdminOrDev ? (Number(assignToId) || null) : task.user_id,
+        // IMPORTANT: Send auth_users.id as assignToUserId, backend will handle users table
+        assignToUserId: isAdminOrDev ? (Number(assignToId) || null) : undefined,
       });
     } finally { setLoading(false); }
   };

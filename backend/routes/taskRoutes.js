@@ -29,6 +29,37 @@ async function notifyById({ userId, type, message, sub, taskId, projectId }) {
   } catch (e) { console.warn("NotifyById error:", e.message); }
 }
 
+// Helper: Get or create user in users table from auth_users.id
+async function getOrCreateUserForProject(authUserId, projectId) {
+  if (!authUserId || !projectId) return null;
+  
+  try {
+    // Get auth_user details
+    const authUser = await AuthUser.findByPk(authUserId);
+    if (!authUser) return null;
+
+    // Find or create corresponding user in users table
+    const [user] = await User.findOrCreate({
+      where: { 
+        email: authUser.email,
+        project_id: projectId 
+      },
+      defaults: {
+        name: authUser.name,
+        email: authUser.email,
+        role: authUser.role || 'member',
+        department: authUser.department,
+        project_id: projectId
+      }
+    });
+
+    return user;
+  } catch (e) {
+    console.warn("getOrCreateUserForProject error:", e.message);
+    return null;
+  }
+}
+
 const STATUS_LABEL = { todo: "To Do", inprogress: "In Progress", inreview: "In Review", done: "Done" };
 
 // GET /api/tasks
@@ -61,11 +92,32 @@ router.post("/", async (req, res) => {
   const decoded = getAuth(req);
   if (!decoded) return res.status(401).json({ message: "Not authenticated" });
   if (decoded.role === "member") return res.status(403).json({ message: "Members cannot create tasks" });
+  
   try {
-    const task = await Task.create({ ...req.body, assignedById: decoded.id });
+    // IMPORTANT: assignToUserId is the auth_users.id from the frontend dropdown
+    const { assignToUserId, project_id, ...taskData } = req.body;
+    
+    // Get or create the user record in users table for this project
+    let userId = null;
+    if (assignToUserId && project_id) {
+      const projectUser = await getOrCreateUserForProject(assignToUserId, project_id);
+      if (projectUser) {
+        userId = projectUser.id; // This is users.id
+      }
+    }
+
+    // Create task with users.id as user_id and auth_users.id as assignedById
+    const task = await Task.create({ 
+      ...taskData,
+      project_id,
+      user_id: userId,
+      assignedById: decoded.id  // The person creating the task (auth_users.id)
+    });
+
     const full = await Task.findByPk(task.id, {
       include: [{ model: User, as: "user", attributes: ["id","name","email","role"] }],
     });
+
     // Notify assignee
     if (full.user?.email && full.user.email !== decoded.email) {
       await notify({
@@ -74,8 +126,12 @@ router.post("/", async (req, res) => {
         sub: full.title, taskId: full.id, projectId: full.project_id,
       });
     }
+
     res.status(201).json(full);
-  } catch (err) { res.status(500).json({ message: err.message }); }
+  } catch (err) { 
+    console.error("Task creation error:", err);
+    res.status(500).json({ message: err.message }); 
+  }
 });
 
 // PUT /api/tasks/:id
@@ -83,6 +139,7 @@ router.put("/:id", async (req, res) => {
   const decoded = getAuth(req);
   if (!decoded) return res.status(401).json({ message: "Not authenticated" });
   if (decoded.role === "member") return res.status(403).json({ message: "Members cannot edit tasks" });
+  
   try {
     const task = await Task.findByPk(req.params.id, {
       include: [{ model: User, as: "user", attributes: ["id","name","email","role"] }],
@@ -90,21 +147,32 @@ router.put("/:id", async (req, res) => {
     if (!task) return res.status(404).json({ message: "Not found" });
 
     const oldAssigneeEmail = task.user?.email;
-    const oldStatus        = task.status;
-    await task.update(req.body);
+    const oldStatus = task.status;
+
+    // Handle reassignment if assignToUserId is provided
+    const { assignToUserId, ...updateData } = req.body;
+    
+    if (assignToUserId && task.project_id) {
+      const projectUser = await getOrCreateUserForProject(assignToUserId, task.project_id);
+      if (projectUser) {
+        updateData.user_id = projectUser.id;
+        updateData.assignedById = decoded.id; // Update who assigned it
+      }
+    }
+
+    await task.update(updateData);
+    
     const updated = await Task.findByPk(task.id, {
       include: [{ model: User, as: "user", attributes: ["id","name","email","role"] }],
     });
 
     const newAssigneeEmail = updated.user?.email;
-    const actorName        = decoded.name || decoded.email;
-    const pid              = updated.project_id;
-    const tid              = updated.id;
+    const actorName = decoded.name || decoded.email;
+    const pid = updated.project_id;
+    const tid = updated.id;
 
     // New assignee notification
     if (newAssigneeEmail && newAssigneeEmail !== oldAssigneeEmail) {
-      // Update assignedById to current user when reassigning
-      await task.update({ assignedById: decoded.id });
       await notify({
         email: newAssigneeEmail, type: "assigned",
         message: `📋 You've been assigned a task by ${actorName}`,
@@ -113,9 +181,9 @@ router.put("/:id", async (req, res) => {
     }
 
     // Status changed
-    if (req.body.status && req.body.status !== oldStatus) {
-      const fromLabel = STATUS_LABEL[oldStatus]       || oldStatus;
-      const toLabel   = STATUS_LABEL[req.body.status] || req.body.status;
+    if (updateData.status && updateData.status !== oldStatus) {
+      const fromLabel = STATUS_LABEL[oldStatus] || oldStatus;
+      const toLabel = STATUS_LABEL[updateData.status] || updateData.status;
       const projectUsers = await User.findAll({ where: { project_id: pid } });
       for (const pu of projectUsers) {
         if (!pu.email) continue;
@@ -132,7 +200,10 @@ router.put("/:id", async (req, res) => {
     }
 
     res.json(updated);
-  } catch (err) { res.status(500).json({ message: err.message }); }
+  } catch (err) { 
+    console.error("Task update error:", err);
+    res.status(500).json({ message: err.message }); 
+  }
 });
 
 // PATCH /api/tasks/:id/status  — drag & drop
@@ -148,13 +219,13 @@ router.patch("/:id/status", async (req, res) => {
     const oldStatus = task.status;
     const newStatus = req.body.status;
     const actorName = decoded.name || decoded.email;
-    const pid       = task.project_id;
-    const tid       = task.id;
+    const pid = task.project_id;
+    const tid = task.id;
 
     await task.update({ status: newStatus });
 
     const fromLabel = STATUS_LABEL[oldStatus] || oldStatus;
-    const toLabel   = STATUS_LABEL[newStatus]  || newStatus;
+    const toLabel = STATUS_LABEL[newStatus] || newStatus;
 
     // Notify all admins/developers on the project
     const projectUsers = await User.findAll({ where: { project_id: pid } });
@@ -166,7 +237,7 @@ router.patch("/:id/status", async (req, res) => {
       if (puAuth && puAuth.id === decoded.id) continue;
       await notify({
         email: pu.email,
-        type:  newStatus === "inreview" ? "review" : "status",
+        type: newStatus === "inreview" ? "review" : "status",
         message: newStatus === "inreview"
           ? `👀 "${task.title}" is ready for review`
           : `🔄 ${task.user?.name || actorName} moved "${task.title}"`,
@@ -231,44 +302,42 @@ router.post("/:id/review", async (req, res) => {
 
     const storedOriginal = originalDueDate || task.dueDate || null;
     const review = {
-      id:              Date.now(),
-      reviewerId:      decoded.id,
-      reviewerName:    decoded.name || decoded.email,
+      id: Date.now(),
+      reviewerId: decoded.id,
+      reviewerName: decoded.name || decoded.email,
       verdict,
-      comment:         comment.trim(),
-      fixDueDate:      fixDueDate || null,
+      comment: comment.trim(),
+      fixDueDate: fixDueDate || null,
       originalDueDate: storedOriginal,
       rejectionNumber: verdict !== "approved" ? rejectionCount + 1 : null,
-      taskStatusBefore: task.status,   // always capture what status it was in
-      createdAt:        new Date().toISOString(),
+      taskStatusBefore: task.status,
+      createdAt: new Date().toISOString(),
     };
     reviews.push(review);
 
-    // Update: always keep reviewVerdict so history tab stays visible
     const update = { reviews: JSON.stringify(reviews), reviewVerdict: verdict };
     if (verdict === "needs_fix") {
-      update.status  = "todo";       // needs_fix → back to To Do, must restart
+      update.status = "todo";
       if (fixDueDate) update.dueDate = fixDueDate;
     } else if (verdict === "partial") {
-      update.status  = "inprogress"; // partial → back to In Progress, fix and resubmit
+      update.status = "inprogress";
       if (fixDueDate) update.dueDate = fixDueDate;
     }
-    // approved → status stays "done", task is complete
     await task.update(update);
 
     // Notify the intern
     if (task.user?.email) {
       const VERDICT_MSG = {
-        approved:  "✅ Your task was approved — great work!",
-        partial:   "🔶 Your task needs minor fixes",
+        approved: "✅ Your task was approved — great work!",
+        partial: "🔶 Your task needs minor fixes",
         needs_fix: "❌ Your task needs to be redone",
       };
       await notify({
-        email:     task.user.email,
-        type:      verdict === "approved" ? "review" : "status",
-        message:   VERDICT_MSG[verdict],
-        sub:       `"${task.title}"${fixDueDate ? ` · Fix by ${fixDueDate}` : ""}`,
-        taskId:    task.id,
+        email: task.user.email,
+        type: verdict === "approved" ? "review" : "status",
+        message: VERDICT_MSG[verdict],
+        sub: `"${task.title}"${fixDueDate ? ` · Fix by ${fixDueDate}` : ""}`,
+        taskId: task.id,
         projectId: task.project_id,
       });
     }
