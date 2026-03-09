@@ -1,97 +1,55 @@
 /**
  * Email Service — Kanban Workspace
- * Uses nodemailer. Set EMAIL_USER + EMAIL_PASS in .env
- * Falls back to console.log if not configured (dev mode).
+ * Uses SendGrid (no IPv6 issues on Render!)
+ * Set SENDGRID_API_KEY and SENDGRID_FROM_EMAIL in environment variables
  */
 
-/**
- * Email Service — Kanban Workspace
- * Uses nodemailer with IPv4 forced (Render free tier blocks IPv6)
- */
-
-let transporter = null;
+let sgMail = null;
 
 try {
-  const nodemailer = require("nodemailer");
-  if (process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD) {
-    // Try with hostname first
-    const transportConfig = {
-      host: "smtp.gmail.com",
-      port: 587,
-      secure: false,
-      auth: {
-        user: process.env.GMAIL_USER,
-        pass: process.env.GMAIL_APP_PASSWORD,
-      },
-      // Force IPv4 - critical for Render free tier
-      family: 4,
-      dnsTimeout: 10000,
-      connectionTimeout: 10000,
-      greetingTimeout: 10000,
-      socketTimeout: 30000,
-      tls: { 
-        rejectUnauthorized: false,
-        minVersion: 'TLSv1.2'
-      },
-      // Additional IPv4 enforcement
-      debug: false,
-      logger: false,
-    };
-    
-    transporter = nodemailer.createTransport(transportConfig);
-    console.log("📧 Email service ready:", process.env.GMAIL_USER);
+  sgMail = require('@sendgrid/mail');
+  
+  if (process.env.SENDGRID_API_KEY) {
+    sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+    console.log("📧 SendGrid email service ready");
   } else {
-    console.log("📧 Email service: not configured");
+    console.log("📧 Email service: SENDGRID_API_KEY not configured");
+    sgMail = null;
   }
 } catch (e) {
-  console.warn("📧 nodemailer not installed:", e.message);
+  console.warn("📧 @sendgrid/mail not installed:", e.message);
+  sgMail = null;
 }
 
 async function send({ to, subject, html }) {
-  if (!transporter) {
+  if (!sgMail || !process.env.SENDGRID_API_KEY) {
     console.log(`📧 [DEV MODE] Email service not configured - would send to: ${to}`);
     console.log(`📧 Subject: ${subject}`);
-    console.log(`📧 Set GMAIL_USER and GMAIL_APP_PASSWORD to enable email delivery`);
+    console.log(`📧 Set SENDGRID_API_KEY and SENDGRID_FROM_EMAIL to enable email delivery`);
     return;
   }
-  
-  // Retry logic for network issues
-  const maxRetries = 3;
-  let lastError;
-  
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      const info = await transporter.sendMail({
-        from: `"Kanban Workspace" <${process.env.GMAIL_USER}>`,
-        to, 
-        subject, 
-        html,
-      });
-      console.log(`✅ Email sent successfully to: ${to} (attempt ${attempt})`);
-      return info;
-    } catch (error) {
-      lastError = error;
-      console.error(`❌ Email attempt ${attempt}/${maxRetries} failed to ${to}:`, error.message);
-      
-      // Don't retry on auth errors
-      if (error.message.includes('authentication') || error.message.includes('Invalid login')) {
-        throw error;
-      }
-      
-      // Wait before retry (exponential backoff)
-      if (attempt < maxRetries) {
-        const waitTime = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
-        console.log(`⏳ Retrying in ${waitTime}ms...`);
-        await new Promise(resolve => setTimeout(resolve, waitTime));
-      }
-    }
-  }
-  
-  // All retries failed
-  console.error(`❌ All ${maxRetries} email attempts failed to ${to}`);
-  throw lastError;
-}
 
+  const fromEmail = process.env.SENDGRID_FROM_EMAIL || process.env.GMAIL_USER || 'noreply@kanban.com';
+  
+  try {
+    await sgMail.send({
+      to,
+      from: {
+        email: fromEmail,
+        name: 'Kanban Workspace'
+      },
+      subject,
+      html,
+    });
+    console.log(`✅ Email sent successfully to: ${to}`);
+  } catch (error) {
+    console.error(`❌ Failed to send email to ${to}:`, error.message);
+    if (error.response) {
+      console.error('SendGrid error details:', error.response.body);
+    }
+    throw error;
+  }
+}
 
 // ── OTP Email ──
 async function sendOtpEmail({ email, otp }) {
