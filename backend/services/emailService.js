@@ -30,6 +30,7 @@ async function send({ to, subject, html }) {
   }
 
   const fromEmail = process.env.SENDGRID_FROM_EMAIL || process.env.GMAIL_USER || 'noreply@kanban.com';
+  const replyTo = process.env.SENDGRID_REPLY_TO || fromEmail;
   
   try {
     await sgMail.send({
@@ -37,6 +38,10 @@ async function send({ to, subject, html }) {
       from: {
         email: fromEmail,
         name: 'Kanban Workspace'
+      },
+      replyTo: {
+        email: replyTo,
+        name: 'Kanban Support'
       },
       subject,
       html,
@@ -55,27 +60,49 @@ async function send({ to, subject, html }) {
 async function sendOtpEmail({ email, otp }) {
   await send({
     to:      email,
-    subject: "Your Kanban Verification Code",
+    subject: "Complete Your Kanban Workspace Registration",
     html: `
 <!DOCTYPE html>
 <html>
-<body style="margin:0;padding:0;background:#0f172a;font-family:'Segoe UI',sans-serif;">
-  <div style="max-width:480px;margin:40px auto;background:#1e293b;border-radius:16px;overflow:hidden;border:1px solid #334155;">
-    <div style="background:linear-gradient(135deg,#1d4ed8,#4f46e5);padding:32px;text-align:center;">
-      <div style="width:56px;height:56px;background:rgba(255,255,255,0.15);border-radius:14px;display:inline-flex;align-items:center;justify-content:center;font-size:28px;font-weight:900;color:#fff;margin-bottom:12px;">K</div>
-      <h1 style="color:#fff;font-size:22px;margin:0;font-weight:700;">Verify your email</h1>
-      <p style="color:rgba(255,255,255,0.7);font-size:14px;margin:8px 0 0;">Kanban Workspace</p>
+<body style="margin:0;padding:0;background:#f8fafc;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;">
+  <div style="max-width:600px;margin:40px auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.1);">
+    <!-- Header -->
+    <div style="background:linear-gradient(135deg,#2563eb,#3b82f6);padding:40px 32px;text-align:center;">
+      <div style="width:64px;height:64px;background:rgba(255,255,255,0.2);border-radius:16px;display:inline-flex;align-items:center;justify-content:center;font-size:32px;font-weight:800;color:#fff;margin-bottom:16px;border:3px solid rgba(255,255,255,0.3);">K</div>
+      <h1 style="color:#fff;font-size:24px;margin:0;font-weight:600;letter-spacing:-0.5px;">Welcome to Kanban Workspace</h1>
+      <p style="color:rgba(255,255,255,0.9);font-size:15px;margin:12px 0 0;font-weight:400;">You're almost ready to get started</p>
     </div>
-    <div style="padding:32px;text-align:center;">
-      <p style="color:#94a3b8;font-size:14px;margin:0 0 24px;">Use this code to complete your registration:</p>
-      <div style="background:#0f172a;border:2px solid #3b82f6;border-radius:14px;padding:24px;margin:0 auto 24px;display:inline-block;">
-        <span style="font-size:40px;font-weight:900;color:#3b82f6;letter-spacing:12px;font-family:monospace;">${otp}</span>
+    
+    <!-- Body -->
+    <div style="padding:40px 32px;">
+      <p style="color:#1e293b;font-size:16px;margin:0 0 24px;line-height:1.6;">
+        Hello,<br><br>
+        Thank you for creating an account with Kanban Workspace. To complete your registration, please enter the verification code below:
+      </p>
+      
+      <!-- OTP Box -->
+      <div style="background:#f1f5f9;border:2px solid #3b82f6;border-radius:12px;padding:28px;margin:0 auto 28px;text-align:center;">
+        <p style="color:#64748b;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:1px;margin:0 0 12px;">Your Verification Code</p>
+        <div style="font-size:36px;font-weight:800;color:#1e40af;letter-spacing:8px;font-family:'Courier New',monospace;">${otp}</div>
       </div>
-      <p style="color:#64748b;font-size:13px;margin:0;">This code expires in <strong style="color:#94a3b8;">10 minutes</strong>.</p>
-      <p style="color:#64748b;font-size:13px;margin:8px 0 0;">If you didn't request this, you can safely ignore this email.</p>
+      
+      <p style="color:#64748b;font-size:14px;margin:0 0 16px;line-height:1.6;">
+        <strong style="color:#475569;">⏱ This code will expire in 10 minutes.</strong>
+      </p>
+      
+      <p style="color:#64748b;font-size:14px;margin:0;line-height:1.6;">
+        If you didn't create an account with Kanban Workspace, you can safely ignore this email.
+      </p>
     </div>
-    <div style="padding:20px;text-align:center;border-top:1px solid #334155;">
-      <p style="color:#475569;font-size:12px;margin:0;">© Kanban Workspace · Secure email verification</p>
+    
+    <!-- Footer -->
+    <div style="background:#f8fafc;padding:24px 32px;text-align:center;border-top:1px solid #e2e8f0;">
+      <p style="color:#94a3b8;font-size:13px;margin:0 0 8px;">
+        Need help? Contact us at <a href="mailto:tomj328622@gmail.com" style="color:#3b82f6;text-decoration:none;">tomj328622@gmail.com</a>
+      </p>
+      <p style="color:#cbd5e1;font-size:12px;margin:0;">
+        © 2026 Kanban Workspace. All rights reserved.
+      </p>
     </div>
   </div>
 </body>
