@@ -127,9 +127,15 @@ export default function EditTaskModal({ task, token, user, canEdit, canDelete, o
           setAssignerOptions(data.assigners); // Only admin + developer
           setAssigneeOptions(data.assignees); // Everyone (admin, dev, member, intern)
           
-          // Set current user as default assigner (auth_users.id)
-          const me = data.assigners.find(u2 => u2.email && user && u2.email.toLowerCase() === user.email.toLowerCase());
-          if (me) setAssignedById(String(me.id));
+          // Set current user as default assigner - match by ID first, then email
+          const me = data.assigners.find(u2 => 
+            String(u2.id) === String(user?.id) || 
+            (u2.email && user && u2.email.toLowerCase() === user.email.toLowerCase())
+          );
+          if (me) {
+            setAssignedById(String(me.id));
+            console.log('✅ Edit: Set Assigned By to:', me.name);
+          }
           
           // If task is assigned, find the user by email (since we're now using auth_users)
           if (task.user && task.user.email) {
@@ -141,7 +147,7 @@ export default function EditTaskModal({ task, token, user, canEdit, canDelete, o
       .catch(err => {
         console.error("Failed to fetch active users:", err);
       });
-  }, [token, user?.email]);
+  }, [token, user?.email, user?.id]);
 
   useEffect(() => {
     if (!canReview || reviewsLoaded) return;

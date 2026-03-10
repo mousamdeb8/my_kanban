@@ -72,9 +72,19 @@ export default function CreateTaskModal({ projectId, token, user, onClose, onCre
           setAssigneeOptions(data.assignees); // Everyone (admin, dev, member, intern)
           
           // Default "Assigned By" to the currently logged-in user
-          const me = data.assigners.find(u => u.email?.toLowerCase() === user?.email?.toLowerCase());
+          // Match by ID first (most reliable), then by email as fallback
+          const me = data.assigners.find(u => 
+            String(u.id) === String(user?.id) || 
+            u.email?.toLowerCase() === user?.email?.toLowerCase()
+          );
+          
           if (me) {
             setAssignedById(String(me.id)); // This is auth_users.id
+            console.log('✅ Set Assigned By to:', me.name); // Debug log
+          } else {
+            console.warn('⚠️ Could not find current user in assigners list');
+            console.log('Current user:', user);
+            console.log('Assigners:', data.assigners);
           }
         }
       })
@@ -82,7 +92,7 @@ export default function CreateTaskModal({ projectId, token, user, onClose, onCre
         console.error("Failed to fetch active users:", err);
         toast.error("Failed to load users");
       });
-  }, [token, canAssign, user?.email]);
+  }, [token, canAssign, user?.email, user?.id]);
 
   const selectedAssigner = assignerOptions.find(u => String(u.id) === String(assignedById));
   const selectedAssignee = assigneeOptions.find(u => String(u.id) === String(assignToId));
