@@ -72,7 +72,24 @@ router.get("/", async (req, res) => {
       include: [{ model: User, as: "user", attributes: ["id","name","email","role"] }],
       order: [["id", "DESC"]],
     });
-    res.json(tasks);
+    
+    // Enrich tasks with avatarColor from auth_users
+    const enrichedTasks = await Promise.all(tasks.map(async (task) => {
+      const taskJson = task.toJSON();
+      if (taskJson.user && taskJson.user.email) {
+        const authUser = await AuthUser.findOne({ 
+          where: { email: taskJson.user.email },
+          attributes: ["avatarColor", "avatarUrl"]
+        });
+        if (authUser) {
+          taskJson.user.avatarColor = authUser.avatarColor;
+          taskJson.user.avatarUrl = authUser.avatarUrl;
+        }
+      }
+      return taskJson;
+    }));
+    
+    res.json(enrichedTasks);
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
@@ -83,7 +100,21 @@ router.get("/:id", async (req, res) => {
       include: [{ model: User, as: "user", attributes: ["id","name","email","role"] }],
     });
     if (!task) return res.status(404).json({ message: "Not found" });
-    res.json(task);
+    
+    // Enrich with avatarColor from auth_users
+    const taskJson = task.toJSON();
+    if (taskJson.user && taskJson.user.email) {
+      const authUser = await AuthUser.findOne({ 
+        where: { email: taskJson.user.email },
+        attributes: ["avatarColor", "avatarUrl"]
+      });
+      if (authUser) {
+        taskJson.user.avatarColor = authUser.avatarColor;
+        taskJson.user.avatarUrl = authUser.avatarUrl;
+      }
+    }
+    
+    res.json(taskJson);
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
