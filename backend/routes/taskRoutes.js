@@ -149,16 +149,29 @@ router.post("/", async (req, res) => {
       include: [{ model: User, as: "user", attributes: ["id","name","email","role"] }],
     });
 
+    // Enrich with avatarColor from auth_users
+    const fullJson = full.toJSON();
+    if (fullJson.user && fullJson.user.email) {
+      const authUser = await AuthUser.findOne({ 
+        where: { email: fullJson.user.email },
+        attributes: ["avatarColor", "avatarUrl"]
+      });
+      if (authUser) {
+        fullJson.user.avatarColor = authUser.avatarColor;
+        fullJson.user.avatarUrl = authUser.avatarUrl;
+      }
+    }
+
     // Notify assignee
-    if (full.user?.email && full.user.email !== decoded.email) {
+    if (fullJson.user?.email && fullJson.user.email !== decoded.email) {
       await notify({
-        email: full.user.email, type: "assigned",
+        email: fullJson.user.email, type: "assigned",
         message: `📋 New task assigned to you by ${decoded.name || decoded.email}`,
-        sub: full.title, taskId: full.id, projectId: full.project_id,
+        sub: fullJson.title, taskId: fullJson.id, projectId: fullJson.project_id,
       });
     }
 
-    res.status(201).json(full);
+    res.status(201).json(fullJson);  // Return enriched version
   } catch (err) { 
     console.error("Task creation error:", err);
     res.status(500).json({ message: err.message }); 
@@ -197,17 +210,30 @@ router.put("/:id", async (req, res) => {
       include: [{ model: User, as: "user", attributes: ["id","name","email","role"] }],
     });
 
-    const newAssigneeEmail = updated.user?.email;
+    // Enrich with avatarColor from auth_users before returning
+    const updatedJson = updated.toJSON();
+    if (updatedJson.user && updatedJson.user.email) {
+      const authUser = await AuthUser.findOne({ 
+        where: { email: updatedJson.user.email },
+        attributes: ["avatarColor", "avatarUrl"]
+      });
+      if (authUser) {
+        updatedJson.user.avatarColor = authUser.avatarColor;
+        updatedJson.user.avatarUrl = authUser.avatarUrl;
+      }
+    }
+
+    const newAssigneeEmail = updatedJson.user?.email;
     const actorName = decoded.name || decoded.email;
-    const pid = updated.project_id;
-    const tid = updated.id;
+    const pid = updatedJson.project_id;
+    const tid = updatedJson.id;
 
     // New assignee notification
     if (newAssigneeEmail && newAssigneeEmail !== oldAssigneeEmail) {
       await notify({
         email: newAssigneeEmail, type: "assigned",
         message: `📋 You've been assigned a task by ${actorName}`,
-        sub: updated.title, taskId: tid, projectId: pid,
+        sub: updatedJson.title, taskId: tid, projectId: pid,
       });
     }
 
@@ -224,13 +250,13 @@ router.put("/:id", async (req, res) => {
         if (puAuth && puAuth.id === decoded.id) continue;
         await notify({
           email: pu.email, type: "status",
-          message: `🔄 ${updated.user?.name || actorName} moved "${updated.title}"`,
+          message: `🔄 ${updatedJson.user?.name || actorName} moved "${updatedJson.title}"`,
           sub: `${fromLabel} → ${toLabel}`, taskId: tid, projectId: pid,
         });
       }
     }
 
-    res.json(updated);
+    res.json(updatedJson);  // Return enriched version
   } catch (err) { 
     console.error("Task update error:", err);
     res.status(500).json({ message: err.message }); 
