@@ -121,9 +121,16 @@ export default function CreateTaskModal({ projectId, token, user, onClose, onCre
   const handleSubmit = async () => {
     if (!title.trim()) return toast.error("Title required");
     if (!dueDate)       return toast.error("Due date required");
+    
+    console.log('📤 Creating task with:');
+    console.log('  assignToId:', assignToId, 'type:', typeof assignToId);
+    console.log('  canAssign:', canAssign);
+    console.log('  Number(assignToId):', Number(assignToId));
+    console.log('  assignToUserId will be:', canAssign ? (Number(assignToId) || null) : null);
+    
     setLoading(true);
     try {
-      await onCreate({
+      const payload = {
         title:       title.trim(),
         description: description.trim() || null,
         priority,
@@ -135,7 +142,11 @@ export default function CreateTaskModal({ projectId, token, user, onClose, onCre
         // IMPORTANT: Send the auth_users.id as assignToUserId
         // Backend will handle creating the users table record
         assignToUserId: canAssign ? (Number(assignToId) || null) : null,
-      });
+      };
+      
+      console.log('📦 Full payload:', payload);
+      
+      await onCreate(payload);
       onClose();
     } finally { setLoading(false); }
   };
