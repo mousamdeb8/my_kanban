@@ -60,14 +60,25 @@ export default function CreateTaskModal({ projectId, token, user, onClose, onCre
   useEffect(() => {
     if (!canAssign) return;
     
+    console.log('🔍 Fetching users from:', `${API}/api/users/active`);
+    
     // NEW ENDPOINT: /api/users/active returns {assigners, assignees}
     fetch(`${API}/api/users/active`, {
       headers: { Authorization: `Bearer ${token}` },
     })
-      .then(r => r.json())
+      .then(r => {
+        console.log('📡 Response status:', r.status);
+        if (!r.ok) {
+          throw new Error(`HTTP ${r.status}: ${r.statusText}`);
+        }
+        return r.json();
+      })
       .then(data => {
+        console.log('📦 Received data:', data);
+        
         // Backend returns: {assigners: [...], assignees: [...]}
         if (data.assigners && data.assignees) {
+          console.log('✅ Valid format - Assigners:', data.assigners.length, 'Assignees:', data.assignees.length);
           setAssignerOptions(data.assigners); // Only admin + developer
           setAssigneeOptions(data.assignees); // Everyone (admin, dev, member, intern)
           
@@ -86,11 +97,15 @@ export default function CreateTaskModal({ projectId, token, user, onClose, onCre
             console.log('Current user:', user);
             console.log('Assigners:', data.assigners);
           }
+        } else {
+          console.error('❌ Invalid data format received:', data);
+          console.error('Expected: {assigners: [...], assignees: [...]}');
+          toast.error("Invalid user data format from server");
         }
       })
       .catch(err => {
-        console.error("Failed to fetch active users:", err);
-        toast.error("Failed to load users");
+        console.error("❌ Failed to fetch active users:", err);
+        toast.error("Failed to load users: " + err.message);
       });
   }, [token, canAssign, user?.email, user?.id]);
 

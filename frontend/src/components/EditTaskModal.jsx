@@ -116,14 +116,25 @@ export default function EditTaskModal({ task, token, user, canEdit, canDelete, o
   useEffect(() => {
     if (!token) return;
     
+    console.log('🔍 Edit: Fetching users from:', API + "/api/users/active");
+    
     // NEW ENDPOINT: /api/users/active returns {assigners, assignees}
     fetch(API + "/api/users/active", {
       headers: { Authorization: "Bearer " + token },
     })
-      .then(r => r.json())
+      .then(r => {
+        console.log('📡 Edit: Response status:', r.status);
+        if (!r.ok) {
+          throw new Error(`HTTP ${r.status}: ${r.statusText}`);
+        }
+        return r.json();
+      })
       .then(data => {
+        console.log('📦 Edit: Received data:', data);
+        
         // Backend returns: {assigners: [...], assignees: [...]}
         if (data.assigners && data.assignees) {
+          console.log('✅ Edit: Valid format - Assigners:', data.assigners.length, 'Assignees:', data.assignees.length);
           setAssignerOptions(data.assigners); // Only admin + developer
           setAssigneeOptions(data.assignees); // Everyone (admin, dev, member, intern)
           
@@ -135,17 +146,25 @@ export default function EditTaskModal({ task, token, user, canEdit, canDelete, o
           if (me) {
             setAssignedById(String(me.id));
             console.log('✅ Edit: Set Assigned By to:', me.name);
+          } else {
+            console.warn('⚠️ Edit: Could not find current user in assigners');
           }
           
           // If task is assigned, find the user by email (since we're now using auth_users)
           if (task.user && task.user.email) {
             const assignedUser = data.assignees.find(u2 => u2.email && u2.email.toLowerCase() === task.user.email.toLowerCase());
-            if (assignedUser) setAssignToId(String(assignedUser.id));
+            if (assignedUser) {
+              setAssignToId(String(assignedUser.id));
+              console.log('✅ Edit: Found assigned user:', assignedUser.name);
+            }
           }
+        } else {
+          console.error('❌ Edit: Invalid data format:', data);
+          console.error('Expected: {assigners: [...], assignees: [...]}');
         }
       })
       .catch(err => {
-        console.error("Failed to fetch active users:", err);
+        console.error("❌ Edit: Failed to fetch active users:", err);
       });
   }, [token, user?.email, user?.id]);
 
