@@ -31,15 +31,29 @@ async function notifyById({ userId, type, message, sub, taskId, projectId }) {
 
 // Helper: Get or create user in users table from auth_users.id
 async function getOrCreateUserForProject(authUserId, projectId) {
-  if (!authUserId || !projectId) return null;
+  if (!authUserId || !projectId) {
+    console.log('⚠️ getOrCreateUserForProject: Missing params - authUserId:', authUserId, 'projectId:', projectId);
+    return null;
+  }
   
   try {
     // Get auth_user details
     const authUser = await AuthUser.findByPk(authUserId);
-    if (!authUser) return null;
+    if (!authUser) {
+      console.log('⚠️ AuthUser not found for ID:', authUserId);
+      return null;
+    }
+
+    console.log('📋 Found AuthUser:', {
+      id: authUser.id,
+      name: authUser.name,
+      email: authUser.email,
+      role: authUser.role,
+      isActive: authUser.isActive
+    });
 
     // Find or create corresponding user in users table
-    const [user] = await User.findOrCreate({
+    const [user, created] = await User.findOrCreate({
       where: { 
         email: authUser.email,
         project_id: projectId 
@@ -53,9 +67,14 @@ async function getOrCreateUserForProject(authUserId, projectId) {
       }
     });
 
+    console.log(created ? '✅ Created new user in users table' : '✅ Found existing user in users table');
+    console.log('👤 User:', { id: user.id, name: user.name, email: user.email, role: user.role });
+
     return user;
   } catch (e) {
-    console.warn("getOrCreateUserForProject error:", e.message);
+    console.error('❌ getOrCreateUserForProject error:', e.message);
+    console.error('❌ Error details:', e);
+    console.error('❌ Params were - authUserId:', authUserId, 'projectId:', projectId);
     return null;
   }
 }
@@ -184,6 +203,10 @@ router.put("/:id", async (req, res) => {
   if (!decoded) return res.status(401).json({ message: "Not authenticated" });
   if (decoded.role === "member") return res.status(403).json({ message: "Members cannot edit tasks" });
   
+  console.log('🔵 PUT /api/tasks/' + req.params.id);
+  console.log('📦 Request body:', JSON.stringify(req.body, null, 2));
+  console.log('🔍 assignToUserId:', req.body.assignToUserId, 'type:', typeof req.body.assignToUserId);
+  
   try {
     const task = await Task.findByPk(req.params.id, {
       include: [{ model: User, as: "user", attributes: ["id","name","email","role"] }],
@@ -196,13 +219,26 @@ router.put("/:id", async (req, res) => {
     // Handle reassignment if assignToUserId is provided
     const { assignToUserId, ...updateData } = req.body;
     
+    console.log('🎯 Extracted assignToUserId:', assignToUserId);
+    console.log('🎯 task.project_id:', task.project_id);
+    console.log('🎯 Condition check:', !!assignToUserId && !!task.project_id);
+    
     if (assignToUserId && task.project_id) {
+      console.log('✅ Calling getOrCreateUserForProject with:', assignToUserId, task.project_id);
       const projectUser = await getOrCreateUserForProject(assignToUserId, task.project_id);
+      console.log('📥 getOrCreateUserForProject returned:', projectUser);
       if (projectUser) {
         updateData.user_id = projectUser.id;
-        updateData.assignedById = decoded.id; // Update who assigned it
+        updateData.assignedById = decoded.id;
+        console.log('✅ Setting user_id to:', projectUser.id);
+      } else {
+        console.warn('⚠️ getOrCreateUserForProject returned null!');
       }
+    } else {
+      console.warn('⚠️ Condition failed - assignToUserId:', assignToUserId, 'project_id:', task.project_id);
     }
+    
+    console.log('💾 Update data:', JSON.stringify(updateData, null, 2));
 
     await task.update(updateData);
     
