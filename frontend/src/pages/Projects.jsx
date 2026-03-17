@@ -120,142 +120,212 @@ function StatCard({ icon, label, value, color, sub }) {
 }
 
 // ─────────────────────────────────────────────
-//  PROJECT CARD
+//  PROJECT CARD (WITH DELETE BUTTON)
 // ─────────────────────────────────────────────
-function ProjectCard({ project, onClick }) {
-  const color   = stringToColor(project.name);
-  const tasks   = project.taskCount   || project.tasks?.length   || 0;
-  const members = project.memberCount || project.members?.length || 0;
-  const done    = project.doneCount   || 0;
-  const pct     = tasks > 0 ? Math.round((done / tasks) * 100) : 0;
-  const [hov, setHov] = useState(false);
+function ProjectCard({ project, onClick, onDelete, isAdmin }) {
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDeleteClick = (e) => {
+    e.stopPropagation();
+    setShowDeleteConfirm(true);
+  };
+
+  const handleConfirmDelete = async (e) => {
+    e.stopPropagation();
+    setDeleting(true);
+
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch(`${API}/api/projects/${project.id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || "Failed to delete");
+      }
+
+      toast.success(`"${data.projectName}" deleted successfully`);
+      if (onDelete) onDelete(project.id);
+
+    } catch (error) {
+      console.error("Delete error:", error);
+      toast.error(error.message || "Failed to delete project");
+    } finally {
+      setDeleting(false);
+      setShowDeleteConfirm(false);
+    }
+  };
+
+  const handleCancelDelete = (e) => {
+    e.stopPropagation();
+    setShowDeleteConfirm(false);
+  };
+
+  const color = stringToColor(project.name);
 
   return (
-    <div onClick={onClick}
-      onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
-      style={{
-        background: hov ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.025)",
-        border: "1px solid " + (hov ? "rgba(255,255,255,0.14)" : "rgba(255,255,255,0.06)"),
-        borderRadius: 18, padding: "22px 22px 18px", cursor: "pointer",
-        transition: "all 0.2s", position: "relative", overflow: "hidden",
-        transform: hov ? "translateY(-2px)" : "none",
-        boxShadow: hov ? "0 8px 32px rgba(0,0,0,0.3)" : "none",
-      }}>
-      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: "linear-gradient(90deg, " + color + ", transparent)", borderRadius: "18px 18px 0 0", opacity: hov ? 1 : 0.5, transition: "opacity 0.2s" }}/>
+    <div onClick={showDeleteConfirm ? undefined : onClick}
+      style={{ 
+        position: "relative",
+        background: "rgba(255,255,255,0.025)", 
+        border: "1px solid rgba(255,255,255,0.07)", 
+        borderRadius: 18, 
+        padding: "20px", 
+        cursor: "pointer", 
+        overflow: "hidden", 
+        transition: "all 0.2s" 
+      }}
+      onMouseEnter={e => !showDeleteConfirm && (e.currentTarget.style.borderColor = "rgba(255,255,255,0.15)", e.currentTarget.style.background = "rgba(255,255,255,0.035)")}
+      onMouseLeave={e => !showDeleteConfirm && (e.currentTarget.style.borderColor = "rgba(255,255,255,0.07)", e.currentTarget.style.background = "rgba(255,255,255,0.025)")}>
+      
+      {/* Top gradient bar */}
+      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: "linear-gradient(90deg, " + color + "AA, transparent)" }}/>
+      
+      {/* Header with icon and delete button */}
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 14 }}>
+        <div style={{ 
+          width: 44, 
+          height: 44, 
+          borderRadius: 12, 
+          background: color + "22", 
+          border: "1px solid " + color + "44", 
+          display: "flex", 
+          alignItems: "center", 
+          justifyContent: "center", 
+          fontSize: 18, 
+          fontWeight: 700, 
+          color 
+        }}>
+          {project.name?.[0]?.toUpperCase() || "P"}
+        </div>
 
-      <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 16 }}>
-        <div style={{ width: 42, height: 42, borderRadius: 12, background: color + "20", border: "1px solid " + color + "40", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, fontWeight: 800, color, flexShrink: 0 }}>
-          {project.name?.[0]?.toUpperCase()}
-        </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <h3 style={{ fontSize: 14, fontWeight: 700, color: hov ? "#a5d6ff" : "#e6edf3", margin: "0 0 3px", transition: "color 0.2s", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{project.name}</h3>
-          {project.description && <p style={{ fontSize: 11, color: "#6e7681", margin: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{project.description}</p>}
-        </div>
-        <span style={{ color: "#6e7681", fontSize: 16, flexShrink: 0, transition: "color 0.2s", color: hov ? "#a5d6ff" : "#6e7681" }}>→</span>
+        {/* Delete Button - Admin Only */}
+        {isAdmin && (
+          <button
+            onClick={handleDeleteClick}
+            style={{ 
+              width: 28, 
+              height: 28, 
+              borderRadius: 8, 
+              border: "1px solid rgba(255,255,255,0.08)", 
+              background: "rgba(255,255,255,0.04)", 
+              color: "#6e7681", 
+              cursor: "pointer", 
+              fontSize: 14, 
+              display: "flex", 
+              alignItems: "center", 
+              justifyContent: "center",
+              transition: "all 0.2s"
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = "rgba(239,68,68,0.15)"; e.currentTarget.style.borderColor = "rgba(239,68,68,0.4)"; e.currentTarget.style.color = "#ef4444"; }}
+            onMouseLeave={e => { e.currentTarget.style.background = "rgba(255,255,255,0.04)"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"; e.currentTarget.style.color = "#6e7681"; }}>
+            🗑️
+          </button>
+        )}
       </div>
 
-      {tasks > 0 && (
-        <div style={{ marginBottom: 14 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-            <span style={{ fontSize: 10, color: "#6e7681" }}>Progress</span>
-            <span style={{ fontSize: 10, fontWeight: 700, color }}>{pct}%</span>
-          </div>
-          <div style={{ height: 3, background: "rgba(255,255,255,0.06)", borderRadius: 999, overflow: "hidden" }}>
-            <div style={{ height: "100%", width: pct + "%", background: "linear-gradient(90deg, " + color + ", " + color + "88)", borderRadius: 999, transition: "width 0.8s ease" }}/>
+      <h3 style={{ fontSize: 15, fontWeight: 700, color: "#e6edf3", margin: "0 0 6px", lineHeight: 1.3 }}>
+        {project.name}
+      </h3>
+      <p style={{ fontSize: 12, color: "#6e7681", margin: "0 0 16px", lineHeight: 1.5, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+        {project.description || "No description"}
+      </p>
+
+      {/* Stats */}
+      <div style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 11, color: "#484f58" }}>
+        <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          📋 {project.taskCount || 0}
+        </span>
+        <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          👥 {project.memberCount || 0}
+        </span>
+        <span style={{ marginLeft: "auto", color: "#484f58" }}>
+          {timeAgo(project.createdAt)}
+        </span>
+      </div>
+
+      {/* Delete Confirmation Overlay */}
+      {showDeleteConfirm && (
+        <div
+          onClick={(e) => e.stopPropagation()}
+          style={{ 
+            position: "absolute", 
+            inset: 0, 
+            background: "rgba(13,17,23,0.98)", 
+            borderRadius: 18, 
+            display: "flex", 
+            flexDirection: "column", 
+            alignItems: "center", 
+            justifyContent: "center", 
+            padding: 20, 
+            zIndex: 10,
+            backdropFilter: "blur(8px)"
+          }}>
+          <div style={{ textAlign: "center", maxWidth: "100%" }}>
+            <div style={{ fontSize: 36, marginBottom: 12 }}>⚠️</div>
+            <h4 style={{ fontSize: 14, fontWeight: 700, color: "#e6edf3", margin: "0 0 8px" }}>
+              Delete Project?
+            </h4>
+            <p style={{ fontSize: 11, color: "#8b949e", margin: "0 0 4px", lineHeight: 1.5 }}>
+              This will permanently delete:
+            </p>
+            <p style={{ fontSize: 12, fontWeight: 600, color: "#ef4444", margin: "0 0 8px" }}>
+              "{project.name}"
+            </p>
+            <p style={{ fontSize: 10, color: "#6e7681", margin: "0 0 16px" }}>
+              All tasks, members, and data will be lost!
+            </p>
+            <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
+              <button
+                onClick={handleCancelDelete}
+                disabled={deleting}
+                style={{ 
+                  padding: "7px 14px", 
+                  borderRadius: 8, 
+                  border: "1px solid rgba(255,255,255,0.08)", 
+                  background: "rgba(255,255,255,0.04)", 
+                  color: "#8b949e", 
+                  fontSize: 12, 
+                  cursor: "pointer", 
+                  fontFamily: "inherit",
+                  opacity: deleting ? 0.5 : 1
+                }}>
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                disabled={deleting}
+                style={{ 
+                  padding: "7px 14px", 
+                  borderRadius: 8, 
+                  border: "none", 
+                  background: deleting ? "rgba(239,68,68,0.5)" : "#ef4444", 
+                  color: "#fff", 
+                  fontSize: 12, 
+                  fontWeight: 600, 
+                  cursor: "pointer", 
+                  fontFamily: "inherit",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6
+                }}>
+                {deleting ? (
+                  <>
+                    <span style={{ animation: "spin 1s linear infinite" }}>⏳</span>
+                    Deleting...
+                  </>
+                ) : (
+                  <>🗑️ Delete Forever</>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}
-
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div style={{ display: "flex", gap: 14 }}>
-          <span style={{ fontSize: 10, color: "#8b949e" }}>📋 {tasks} task{tasks !== 1 ? "s" : ""}</span>
-          {members > 0 && <span style={{ fontSize: 10, color: "#8b949e" }}>👥 {members}</span>}
-          {done > 0 && <span style={{ fontSize: 10, color: "#3fb950" }}>✅ {done} done</span>}
-        </div>
-        {project.createdAt && <span style={{ fontSize: 10, color: "#484f58" }}>{timeAgo(project.createdAt)}</span>}
-      </div>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────
-//  UNASSIGNED HOLDING PAGE
-// ─────────────────────────────────────────────
-function UnassignedPage({ user, logout }) {
-  const rc   = ROLE_CONFIG[(user?.role || "").toLowerCase()] || ROLE_CONFIG.member;
-  const dots = [0, 1, 2];
-
-  return (
-    <div style={{ minHeight: "100vh", background: "#080c18", display: "flex", alignItems: "center", justifyContent: "center", padding: 24, fontFamily: "'DM Sans', system-ui, sans-serif" }}>
-
-      {/* Ambient glow */}
-      <div style={{ position: "fixed", top: "20%", left: "50%", transform: "translateX(-50%)", width: 600, height: 300, background: "radial-gradient(ellipse, rgba(59,130,246,0.06) 0%, transparent 70%)", pointerEvents: "none" }}/>
-
-      <div style={{ maxWidth: 440, width: "100%", textAlign: "center" }}>
-
-        {/* Animated waiting icon */}
-        <div style={{ position: "relative", width: 88, height: 88, margin: "0 auto 28px" }}>
-          <div style={{ width: 88, height: 88, borderRadius: 24, background: "rgba(59,130,246,0.08)", border: "1px solid rgba(59,130,246,0.15)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 36 }}>
-            {rc.icon}
-          </div>
-          {/* Pulse rings */}
-          <div style={{ position: "absolute", inset: -8, borderRadius: 32, border: "1px solid rgba(59,130,246,0.12)", animation: "pulse 2s ease-in-out infinite" }}/>
-          <div style={{ position: "absolute", inset: -16, borderRadius: 40, border: "1px solid rgba(59,130,246,0.06)", animation: "pulse 2s ease-in-out infinite 0.5s" }}/>
-          {/* Green dot */}
-          <div style={{ position: "absolute", top: -3, right: -3, width: 18, height: 18, borderRadius: "50%", background: "#238636", border: "2px solid #080c18", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#3fb950" }}/>
-          </div>
-        </div>
-
-        <h1 style={{ fontSize: 26, fontWeight: 800, color: "#e6edf3", margin: "0 0 10px", letterSpacing: "-0.02em" }}>
-          You&apos;re in! Just waiting...
-        </h1>
-        <p style={{ fontSize: 14, color: "#8b949e", lineHeight: 1.7, margin: "0 0 28px" }}>
-          Hey <span style={{ color: "#e6edf3", fontWeight: 600 }}>{user?.name?.split(" ")[0]}</span>, your account is active.<br/>
-          An admin will assign you to a project soon.
-        </p>
-
-        {/* Profile card */}
-        <div style={{ background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 16, padding: "16px 20px", marginBottom: 20, textAlign: "left" }}>
-          <p style={{ fontSize: 10, fontWeight: 700, color: "#484f58", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 12 }}>Your Account</p>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <div style={{ width: 40, height: 40, borderRadius: 12, background: stringToColor(user?.name) + "33", border: "1px solid " + stringToColor(user?.name) + "55", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 700, color: stringToColor(user?.name), flexShrink: 0 }}>
-              {user?.name?.[0]?.toUpperCase()}
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <p style={{ fontSize: 14, fontWeight: 600, color: "#e6edf3", margin: 0 }}>{user?.name}</p>
-              <p style={{ fontSize: 11, color: "#6e7681", margin: "2px 0 0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user?.email}</p>
-            </div>
-            <div style={{ flexShrink: 0, padding: "4px 10px", borderRadius: 20, background: rc.badgeBg, color: rc.badgeColor, fontSize: 10, fontWeight: 700, whiteSpace: "nowrap" }}>
-              {rc.icon} {rc.label}
-            </div>
-          </div>
-        </div>
-
-        {/* Status indicator */}
-        <div style={{ background: "rgba(35,134,54,0.08)", border: "1px solid rgba(35,134,54,0.2)", borderRadius: 12, padding: "12px 16px", marginBottom: 24, display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#3fb950", flexShrink: 0, boxShadow: "0 0 8px #3fb950" }}/>
-          <p style={{ fontSize: 12, color: "#3fb950", margin: 0, fontWeight: 500 }}>Account active · Awaiting project assignment</p>
-          {/* Animated dots */}
-          <div style={{ marginLeft: "auto", display: "flex", gap: 3 }}>
-            {dots.map(i => (
-              <div key={i} style={{ width: 4, height: 4, borderRadius: "50%", background: "#3fb950", opacity: 0.4, animation: "blink 1.4s ease-in-out infinite", animationDelay: (i * 0.2) + "s" }}/>
-            ))}
-          </div>
-        </div>
-
-        <button onClick={logout}
-          style={{ fontSize: 12, color: "#484f58", background: "none", border: "none", cursor: "pointer", padding: "6px 12px", borderRadius: 8, transition: "color 0.2s", fontFamily: "inherit" }}
-          onMouseEnter={e => e.target.style.color = "#8b949e"}
-          onMouseLeave={e => e.target.style.color = "#484f58"}>
-          Sign out
-        </button>
-      </div>
-
-      <style>{`
-        @keyframes pulse { 0%,100% { opacity: 0.6; transform: scale(1); } 50% { opacity: 1; transform: scale(1.04); } }
-        @keyframes blink { 0%,100% { opacity: 0.3; } 50% { opacity: 1; } }
-      `}</style>
     </div>
   );
 }
@@ -264,77 +334,67 @@ function UnassignedPage({ user, logout }) {
 //  MAIN COMPONENT
 // ─────────────────────────────────────────────
 export default function Projects() {
-  const { user, token, logout } = useAuth();
-  const navigate  = useNavigate();
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+
   const [projects,    setProjects]    = useState([]);
-  const [stats,       setStats]       = useState({ tasks: 0, members: 0, done: 0, inreview: 0, todo: 0 });
-  const [loading,     setLoading]     = useState(true);
+  const [stats,       setStats]       = useState({ tasks: 0, todo: 0, inprogress: 0, inreview: 0, done: 0 });
   const [showCreate,  setShowCreate]  = useState(false);
   const [search,      setSearch]      = useState("");
 
-  const role    = (user?.role || "").toLowerCase();
-  const isAdmin = role === "admin";
-  const isDev   = role === "developer";
-  const rc      = ROLE_CONFIG[role] || ROLE_CONFIG.member;
+  const token     = localStorage.getItem("token");
+  const firstName = (user?.name || "").split(" ")[0];
+  const isAdmin   = user?.role === "admin";
+  const isDev     = user?.role === "developer";
+  const rc        = ROLE_CONFIG[user?.role] || ROLE_CONFIG.member;
 
   useEffect(() => {
-    if (!token) return;
-    setLoading(true);
-    fetch(API + "/api/projects", { headers: { Authorization: "Bearer " + token } })
-      .then(r => r.json())
-      .then(data => {
-        const list = Array.isArray(data) ? data : [];
-        setProjects(list);
-        let tasks = 0, members = 0, done = 0, inreview = 0, todo = 0;
-        list.forEach(p => {
-          tasks    += p.taskCount     || p.tasks?.length   || 0;
-          members  += p.memberCount   || p.members?.length || 0;
-          done     += p.doneCount     || 0;
-          inreview += p.inreviewCount || 0;
-          todo     += p.todoCount     || 0;
-        });
-        setStats({ tasks, members, done, inreview, todo });
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [token]);
+    if (!token) return navigate("/login");
+    fetchProjects();
+    if (isAdmin) fetchStats();
+  }, [token, navigate, isAdmin]);
 
-  const filtered = projects.filter(p =>
-    p.name?.toLowerCase().includes(search.toLowerCase())
-  );
+  const fetchProjects = async () => {
+    try {
+      const res  = await fetch(API + "/api/projects", { headers: { Authorization: "Bearer " + token } });
+      const data = await res.json();
+      if (res.ok) setProjects(data);
+      else console.error(data.message);
+    } catch (err) { console.error("Failed to fetch projects:", err); }
+  };
 
-  // ── Unassigned non-admin with no projects ──
-  if (!loading && !isAdmin && !isDev && projects.length === 0) {
-    return <UnassignedPage user={user} logout={logout}/>;
-  }
+  const fetchStats = async () => {
+    try {
+      const res  = await fetch(API + "/api/tasks/stats", { headers: { Authorization: "Bearer " + token } });
+      const data = await res.json();
+      if (res.ok) setStats({ tasks: data.total || 0, todo: data.todo || 0, inprogress: data.inprogress || 0, inreview: data.inreview || 0, done: data.done || 0 });
+    } catch (err) { console.error("Failed to fetch stats:", err); }
+  };
 
-  // ── Loading ──
-  if (loading) {
-    return (
-      <div style={{ minHeight: "100vh", background: "#080c18", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 16 }}>
-        <div style={{ width: 36, height: 36, border: "2px solid rgba(59,130,246,0.2)", borderTop: "2px solid #3b82f6", borderRadius: "50%", animation: "spin 0.7s linear infinite" }}/>
-        <p style={{ color: "#484f58", fontSize: 13, fontFamily: "system-ui" }}>Loading workspace…</p>
-        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-      </div>
-    );
-  }
+  const handleProjectCreated = (newProj) => {
+    setProjects(prev => [...prev, newProj]);
+  };
 
-  // ── Main Dashboard ──
-  const firstName = user?.name?.split(" ")[0] || "there";
+  const handleProjectDeleted = (deletedId) => {
+    setProjects(prev => prev.filter(p => p.id !== deletedId));
+  };
+
+  const filtered = search.trim()
+    ? projects.filter(p => p.name.toLowerCase().includes(search.toLowerCase()))
+    : projects;
 
   return (
-    <div style={{ minHeight: "100vh", background: "#080c18", color: "#e6edf3", fontFamily: "'DM Sans', system-ui, sans-serif" }}>
-      <Toaster position="top-right" toastOptions={{ style: { background: "#161b22", color: "#e6edf3", border: "1px solid rgba(255,255,255,0.1)" }}}/>
-      {showCreate && <CreateModal token={token} onClose={() => setShowCreate(false)} onCreate={p => setProjects(prev => [...prev, p])}/>}
+    <div style={{ minHeight: "100vh", background: "#010409", color: "#e6edf3", fontFamily: "system-ui, -apple-system, sans-serif", position: "relative", overflow: "hidden" }}>
+      <Toaster position="top-center" toastOptions={{ style: { background: "#161b22", color: "#e6edf3", border: "1px solid rgba(255,255,255,0.1)" } }}/>
 
-      {/* Ambient glow */}
-      <div style={{ position: "fixed", top: 0, left: "30%", width: 800, height: 500, background: "radial-gradient(ellipse, rgba(59,130,246,0.04) 0%, transparent 65%)", pointerEvents: "none", zIndex: 0 }}/>
+      {/* ── Background Effect ── */}
+      <div style={{ position: "fixed", inset: 0, background: "radial-gradient(circle at 50% 20%, rgba(56,139,253,0.08) 0%, transparent 50%)", pointerEvents: "none" }}/>
 
-      {/* ── Top Nav ── */}
-      <header style={{ position: "sticky", top: 0, zIndex: 10, borderBottom: "1px solid rgba(255,255,255,0.06)", background: "rgba(8,12,24,0.85)", backdropFilter: "blur(16px)", padding: "0 28px" }}>
-        <div style={{ maxWidth: 1100, margin: "0 auto", height: 58, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <div style={{ width: 32, height: 32, borderRadius: 9, background: "linear-gradient(135deg, #1d4ed8, #4f46e5)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 900, color: "#fff" }}>K</div>
+      {/* ── Header ── */}
+      <header style={{ background: "rgba(22,27,34,0.8)", backdropFilter: "blur(12px)", borderBottom: "1px solid rgba(255,255,255,0.05)", position: "sticky", top: 0, zIndex: 100 }}>
+        <div style={{ maxWidth: 1100, margin: "0 auto", padding: "14px 28px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+            <div style={{ width: 28, height: 28, borderRadius: 8, background: "linear-gradient(135deg, #388bfd 0%, #1f6feb 100%)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}>📊</div>
             <span style={{ fontSize: 14, fontWeight: 700, color: "#c9d1d9" }}>Kanban Workspace</span>
             <div style={{ padding: "3px 10px", borderRadius: 20, background: rc.badgeBg, color: rc.badgeColor, fontSize: 10, fontWeight: 700 }}>
               {rc.icon} {rc.label}
@@ -413,7 +473,13 @@ export default function Projects() {
         ) : (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 14 }}>
             {filtered.map(p => (
-              <ProjectCard key={p.id} project={p} onClick={() => navigate("/projects/" + p.id + "/board")}/>
+              <ProjectCard 
+                key={p.id} 
+                project={p} 
+                onClick={() => navigate("/projects/" + p.id + "/board")}
+                onDelete={handleProjectDeleted}
+                isAdmin={isAdmin}
+              />
             ))}
 
             {/* "New Project" ghost card — admin only */}
@@ -452,6 +518,9 @@ export default function Projects() {
           </div>
         )}
       </main>
+
+      {/* ── Create Modal ── */}
+      {showCreate && <CreateModal token={token} onClose={() => setShowCreate(false)} onCreate={handleProjectCreated}/>}
     </div>
   );
 }

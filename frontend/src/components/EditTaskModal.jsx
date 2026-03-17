@@ -189,8 +189,15 @@ export default function EditTaskModal({ task, token, user, canEdit, canDelete, o
 
   const handleSaveTask = async () => {
     if (!title.trim()) return toast.error("Title required");
+    
+    console.log('📝 Editing task - assignToId:', assignToId, 'type:', typeof assignToId);
+    
     setLoading(true);
     try {
+      const assignToUserIdValue = assignToId && assignToId !== "" ? Number(assignToId) : null;
+      
+      console.log('📤 Sending assignToUserId:', assignToUserIdValue);
+      
       await onUpdate({
         ...task,
         title:       title.trim(),
@@ -200,7 +207,7 @@ export default function EditTaskModal({ task, token, user, canEdit, canDelete, o
         tag:      tag.trim() || null,
         taskType,
         // IMPORTANT: Send auth_users.id as assignToUserId, backend will handle users table
-        assignToUserId: isAdminOrDev ? (Number(assignToId) || null) : undefined,
+        assignToUserId: isAdminOrDev ? assignToUserIdValue : undefined,
       });
     } finally { setLoading(false); }
   };
