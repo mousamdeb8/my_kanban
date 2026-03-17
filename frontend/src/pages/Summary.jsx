@@ -1,196 +1,495 @@
-import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
-import toast, { Toaster } from "react-hot-toast";
+const express = require("express");
+const router  = express.Router();
+const jwt     = require("jsonwebtoken");
+const { Task, User, AuthUser, Notification } = require("../models");
+const GamificationService = require("../services/gamificationService");
 
-const API = import.meta.env.VITE_API_URL || "http://localhost:8000";
-
-const STATUS_COLORS = {
-  todo:       { color: "#3b82f6", label: "To Do" },
-  inprogress: { color: "#f59e0b", label: "In Progress" },
-  inreview:   { color: "#8b5cf6", label: "In Review" },
-  done:       { color: "#22c55e", label: "Done" },
+const getAuth = (req) => {
+  try {
+    const h = req.headers.authorization;
+    if (!h) return null;
+    return jwt.verify(h.split(" ")[1], process.env.JWT_SECRET);
+  } catch { return null; }
 };
-const PRIORITY_COLORS = { High: "#ef4444", Medium: "#f59e0b", Low: "#3b82f6" };
 
-function stringToColor(str = "") {
-  const c = ["#4f86c6","#e67e22","#2ecc71","#9b59b6","#e74c3c","#1abc9c","#f39c12","#3498db"];
-  let h = 0; for (let i = 0; i < str.length; i++) h = str.charCodeAt(i) + ((h << 5) - h);
-  return c[Math.abs(h) % c.length];
+// notify by email → looks up auth_user → creates notification with taskId + projectId
+async function notify({ email, type, message, sub, taskId, projectId }) {
+  if (!email) return;
+  try {
+    const authUser = await AuthUser.findOne({ where: { email } });
+    if (authUser) {
+      await Notification.create({ userId: authUser.id, type, message, sub: sub || null, taskId: taskId || null, projectId: projectId || null });
+    }
+  } catch (e) { console.warn("Notify error:", e.message); }
 }
 
-export default function Summary() {
-  const { projectId } = useParams();
-  const { token } = useAuth();
+async function notifyById({ userId, type, message, sub, taskId, projectId }) {
+  if (!userId) return;
+  try {
+    await Notification.create({ userId, type, message, sub: sub || null, taskId: taskId || null, projectId: projectId || null });
+  } catch (e) { console.warn("NotifyById error:", e.message); }
+}
 
-  const [tasks,   setTasks]   = useState([]);
-  const [loading, setLoading] = useState(true);
+// Helper: Get or create user in users table from auth_users.id
+async function getOrCreateUserForProject(authUserId, projectId) {
+  if (!authUserId || !projectId) {
+    console.log('⚠️ getOrCreateUserForProject: Missing params - authUserId:', authUserId, 'projectId:', projectId);
+    return null;
+  }
+  
+  try {
+    // Get auth_user details
+    const authUser = await AuthUser.findByPk(authUserId);
+    if (!authUser) {
+      console.log('⚠️ AuthUser not found for ID:', authUserId);
+      return null;
+    }
 
-  useEffect(() => {
-    if (!token) return;
-    Promise.all([
-      fetch(`${API}/api/tasks?project_id=${projectId}`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
-    ]).then(([t]) => {
-      setTasks(Array.isArray(t) ? t : []);
-      setLoading(false);
-    }).catch(() => setLoading(false));
-  }, [projectId, token]);
+    console.log('📋 Found AuthUser:', {
+      id: authUser.id,
+      name: authUser.name,
+      email: authUser.email,
+      role: authUser.role,
+      isActive: authUser.isActive
+    });
 
-  if (loading) return (
-    <div className="flex items-center justify-center h-64">
-      <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"/>
-    </div>
-  );
+    // Find or create corresponding user in users table
+    const [user, created] = await User.findOrCreate({
+      where: { 
+        email: authUser.email,
+        project_id: projectId 
+      },
+      defaults: {
+        name: authUser.name,
+        email: authUser.email,
+        role: authUser.role || 'member',
+        department: authUser.department,
+        project_id: projectId
+      }
+    });
 
-  const now        = new Date();
-  const sevenAgo   = new Date(now - 7 * 86400000);
-  const sevenAhead = new Date(now.getTime() + 7 * 86400000);
-  const completed  = tasks.filter(t => t.status === "done" && new Date(t.updatedAt) >= sevenAgo).length;
-  const updated    = tasks.filter(t => new Date(t.updatedAt) >= sevenAgo).length;
-  const created    = tasks.filter(t => new Date(t.createdAt) >= sevenAgo).length;
-  const dueSoon    = tasks.filter(t => t.dueDate && new Date(t.dueDate) <= sevenAhead && new Date(t.dueDate) >= now && t.status !== "done").length;
+    console.log(created ? '✅ Created new user in users table' : '✅ Found existing user in users table');
+    console.log('👤 User:', { id: user.id, name: user.name, email: user.email, role: user.role });
 
-  const statusCounts = Object.keys(STATUS_COLORS).reduce((a, s) => ({ ...a, [s]: tasks.filter(t => t.status === s).length }), {});
-  const total = tasks.length;
-  const radius = 60, circ = 2 * Math.PI * radius;
-  let off = 0;
-  const segments = Object.entries(statusCounts).map(([key, count]) => {
-    const dash = total > 0 ? (count / total) * circ : 0;
-    const seg = { key, count, color: STATUS_COLORS[key].color, dash, offset: off };
-    off += dash;
-    return seg;
-  });
+    return user;
+  } catch (e) {
+    console.error('❌ getOrCreateUserForProject error:', e.message);
+    console.error('❌ Error details:', e);
+    console.error('❌ Params were - authUserId:', authUserId, 'projectId:', projectId);
+    return null;
+  }
+}
 
-  const recent = [...tasks].sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt)).slice(0, 8);
-  const timeAgo = (date) => {
-    const d = Math.floor((now - new Date(date)) / 1000);
-    if (d < 60) return "just now";
-    if (d < 3600) return `${Math.floor(d/60)}m ago`;
-    if (d < 86400) return `${Math.floor(d/3600)}h ago`;
-    return `${Math.floor(d/86400)}d ago`;
-  };
+const STATUS_LABEL = { todo: "To Do", inprogress: "In Progress", inreview: "In Review", done: "Done" };
 
-  const priCounts = ["High","Medium","Low"].map(p => ({
-    label: p, count: tasks.filter(t => t.priority === p).length, color: PRIORITY_COLORS[p],
-  }));
-  const maxPri = Math.max(...priCounts.map(p => p.count), 1);
+// GET /api/tasks
+router.get("/", async (req, res) => {
+  try {
+    const where = {};
+    if (req.query.project_id) where.project_id = Number(req.query.project_id);
+    const tasks = await Task.findAll({
+      where,
+      include: [{ model: User, as: "user", attributes: ["id","name","email","role"] }],
+      order: [["id", "DESC"]],
+    });
+    
+    // Enrich tasks with avatarColor from auth_users
+    const enrichedTasks = await Promise.all(tasks.map(async (task) => {
+      const taskJson = task.toJSON();
+      if (taskJson.user && taskJson.user.email) {
+        const authUser = await AuthUser.findOne({ 
+          where: { email: taskJson.user.email },
+          attributes: ["avatarColor", "avatarUrl"]
+        });
+        if (authUser) {
+          taskJson.user.avatarColor = authUser.avatarColor;
+          taskJson.user.avatarUrl = authUser.avatarUrl;
+        }
+      }
+      return taskJson;
+    }));
+    
+    res.json(enrichedTasks);
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
 
-  return (
-    <div className="p-6 space-y-6 dark:bg-gray-900 min-h-full">
-      <Toaster position="top-right"/>
+// GET /api/tasks/:id
+router.get("/:id", async (req, res) => {
+  try {
+    const task = await Task.findByPk(req.params.id, {
+      include: [{ model: User, as: "user", attributes: ["id","name","email","role"] }],
+    });
+    if (!task) return res.status(404).json({ message: "Not found" });
+    
+    // Enrich with avatarColor from auth_users
+    const taskJson = task.toJSON();
+    if (taskJson.user && taskJson.user.email) {
+      const authUser = await AuthUser.findOne({ 
+        where: { email: taskJson.user.email },
+        attributes: ["avatarColor", "avatarUrl"]
+      });
+      if (authUser) {
+        taskJson.user.avatarColor = authUser.avatarColor;
+        taskJson.user.avatarUrl = authUser.avatarUrl;
+      }
+    }
+    
+    res.json(taskJson);
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
 
-      <div>
-        <h1 className="text-xl font-bold text-gray-800 dark:text-white">Summary</h1>
-        <p className="text-sm text-gray-400 mt-0.5">Overview of your project activity</p>
-      </div>
+// POST /api/tasks
+router.post("/", async (req, res) => {
+  const decoded = getAuth(req);
+  if (!decoded) return res.status(401).json({ message: "Not authenticated" });
+  if (decoded.role === "member") return res.status(403).json({ message: "Members cannot create tasks" });
+  
+  try {
+    // IMPORTANT: assignToUserId is the auth_users.id from the frontend dropdown
+    const { assignToUserId, project_id, ...taskData } = req.body;
+    
+    // Get or create the user record in users table for this project
+    let userId = null;
+    if (assignToUserId && project_id) {
+      const projectUser = await getOrCreateUserForProject(assignToUserId, project_id);
+      if (projectUser) {
+        userId = projectUser.id; // This is users.id
+      }
+    }
 
-      {/* Stats cards */}
-      <div className="grid grid-cols-4 gap-4">
-        {[
-          { icon: "✅", value: completed, label: "Completed", sub: "last 7 days", color: "text-green-600",  bg: "bg-green-50"  },
-          { icon: "✏️", value: updated,   label: "Updated",   sub: "last 7 days", color: "text-blue-600",   bg: "bg-blue-50"   },
-          { icon: "📋", value: created,   label: "Created",   sub: "last 7 days", color: "text-purple-600", bg: "bg-purple-50" },
-          { icon: "⏰", value: dueSoon,   label: "Due soon",  sub: "next 7 days", color: "text-orange-600", bg: "bg-orange-50" },
-        ].map(s => (
-          <div key={s.label} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 flex items-center gap-4">
-            <div className={`w-10 h-10 rounded-lg ${s.bg} flex items-center justify-center text-lg flex-shrink-0`}>{s.icon}</div>
-            <div>
-              <p className={`text-2xl font-bold ${s.color}`}>{s.value}</p>
-              <p className="text-xs font-semibold text-gray-700 dark:text-gray-300">{s.label}</p>
-              <p className="text-[10px] text-gray-400">{s.sub}</p>
-            </div>
-          </div>
-        ))}
-      </div>
+    // Create task with users.id as user_id and auth_users.id as assignedById
+    const task = await Task.create({ 
+      ...taskData,
+      project_id,
+      user_id: userId,
+      assignedById: decoded.id  // The person creating the task (auth_users.id)
+    });
 
-      {/* Status + Recent activity */}
-      <div className="grid grid-cols-2 gap-4">
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
-          <h2 className="text-sm font-bold text-gray-800 dark:text-white mb-1">Status overview</h2>
-          <p className="text-xs text-gray-400 mb-4">All work items by status</p>
-          <div className="flex items-center gap-6">
-            <svg width="160" height="160" viewBox="0 0 160 160" className="flex-shrink-0">
-              {total === 0
-                ? <circle cx="80" cy="80" r={radius} fill="none" stroke="#e5e7eb" strokeWidth="22"/>
-                : segments.map(s => (
-                    <circle key={s.key} cx="80" cy="80" r={radius} fill="none"
-                      stroke={s.color} strokeWidth="22"
-                      strokeDasharray={`${s.dash} ${circ - s.dash}`}
-                      strokeDashoffset={-s.offset + circ * 0.25}/>
-                  ))
-              }
-              <text x="80" y="76" textAnchor="middle" style={{ fontSize: 24, fontWeight: 700, fill: "#1f2937" }}>{total}</text>
-              <text x="80" y="94" textAnchor="middle" style={{ fontSize: 10, fill: "#9ca3af" }}>Total issues</text>
-            </svg>
-            <div className="space-y-2.5 flex-1">
-              {Object.entries(STATUS_COLORS).map(([k, v]) => {
-                const cnt = statusCounts[k];
-                const pct = total > 0 ? Math.round((cnt / total) * 100) : 0;
-                return (
-                  <div key={k} className="flex items-center gap-2">
-                    <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: v.color }}/>
-                    <span className="text-xs text-gray-600 dark:text-gray-300 flex-1">{v.label}</span>
-                    <span className="text-xs font-semibold text-gray-800 dark:text-white">{cnt}</span>
-                    <span className="text-[10px] text-gray-400 w-8 text-right">{pct}%</span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
+    const full = await Task.findByPk(task.id, {
+      include: [{ model: User, as: "user", attributes: ["id","name","email","role"] }],
+    });
 
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
-          <h2 className="text-sm font-bold text-gray-800 dark:text-white mb-1">Recent activity</h2>
-          <p className="text-xs text-gray-400 mb-4">Latest updates</p>
-          <div className="space-y-3 overflow-y-auto max-h-52">
-            {recent.length === 0 && <p className="text-xs text-gray-400 italic">No activity yet</p>}
-            {recent.map(task => {
-              const a   = task.user?.name || "Unassigned";
-              const cfg = STATUS_COLORS[task.status];
-              return (
-                <div key={task.id} className="flex items-start gap-2.5">
-                  <div className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white flex-shrink-0 mt-0.5"
-                    style={{ background: stringToColor(a) }}>
-                    {a[0].toUpperCase()}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs text-gray-700 dark:text-gray-300">
-                      <span className="font-semibold">{a}</span>{" · "}
-                      <span className="text-gray-500">{task.title}</span>
-                    </p>
-                    <div className="flex items-center gap-1.5 mt-0.5">
-                      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded"
-                        style={{ background: cfg?.color + "22", color: cfg?.color }}>
-                        {cfg?.label}
-                      </span>
-                      <span className="text-[10px] text-gray-400">{timeAgo(task.updatedAt)}</span>
-                    </div>
-                  </div>
-                </div>
+    // Enrich with avatarColor from auth_users
+    const fullJson = full.toJSON();
+    if (fullJson.user && fullJson.user.email) {
+      const authUser = await AuthUser.findOne({ 
+        where: { email: fullJson.user.email },
+        attributes: ["avatarColor", "avatarUrl"]
+      });
+      if (authUser) {
+        fullJson.user.avatarColor = authUser.avatarColor;
+        fullJson.user.avatarUrl = authUser.avatarUrl;
+      }
+    }
+
+    // Notify assignee
+    if (fullJson.user?.email && fullJson.user.email !== decoded.email) {
+      await notify({
+        email: fullJson.user.email, type: "assigned",
+        message: `📋 New task assigned to you by ${decoded.name || decoded.email}`,
+        sub: fullJson.title, taskId: fullJson.id, projectId: fullJson.project_id,
+      });
+    }
+
+    res.status(201).json(fullJson);  // Return enriched version
+  } catch (err) { 
+    console.error("Task creation error:", err);
+    res.status(500).json({ message: err.message }); 
+  }
+});
+
+// PUT /api/tasks/:id
+router.put("/:id", async (req, res) => {
+  const decoded = getAuth(req);
+  if (!decoded) return res.status(401).json({ message: "Not authenticated" });
+  if (decoded.role === "member") return res.status(403).json({ message: "Members cannot edit tasks" });
+  
+  console.log('🔵 PUT /api/tasks/' + req.params.id);
+  console.log('📦 Request body:', JSON.stringify(req.body, null, 2));
+  console.log('🔍 assignToUserId:', req.body.assignToUserId, 'type:', typeof req.body.assignToUserId);
+  
+  try {
+    const task = await Task.findByPk(req.params.id, {
+      include: [{ model: User, as: "user", attributes: ["id","name","email","role"] }],
+    });
+    if (!task) return res.status(404).json({ message: "Not found" });
+
+    const oldAssigneeEmail = task.user?.email;
+    const oldStatus = task.status;
+
+    // Handle reassignment if assignToUserId is provided
+    const { assignToUserId, ...updateData } = req.body;
+    
+    console.log('🎯 Extracted assignToUserId:', assignToUserId);
+    console.log('🎯 task.project_id:', task.project_id);
+    console.log('🎯 Condition check:', !!assignToUserId && !!task.project_id);
+    
+    if (assignToUserId && task.project_id) {
+      console.log('✅ Calling getOrCreateUserForProject with:', assignToUserId, task.project_id);
+      const projectUser = await getOrCreateUserForProject(assignToUserId, task.project_id);
+      console.log('📥 getOrCreateUserForProject returned:', projectUser);
+      if (projectUser) {
+        updateData.user_id = projectUser.id;
+        updateData.assignedById = decoded.id;
+        console.log('✅ Setting user_id to:', projectUser.id);
+      } else {
+        console.warn('⚠️ getOrCreateUserForProject returned null!');
+      }
+    } else {
+      console.warn('⚠️ Condition failed - assignToUserId:', assignToUserId, 'project_id:', task.project_id);
+    }
+    
+    console.log('💾 Update data:', JSON.stringify(updateData, null, 2));
+
+    await task.update(updateData);
+    
+    // AUTO-AWARD POINTS when task is completed
+    if (updateData.status === "done" && oldStatus !== "done") {
+      const isEarly = task.dueDate && new Date() < new Date(task.dueDate);
+      const userId = task.user_id || updateData.user_id;
+      if (userId) {
+        try {
+          // Get auth_user id from users table
+          const taskUser = await User.findByPk(userId);
+          if (taskUser) {
+            const authUser = await AuthUser.findOne({ where: { email: taskUser.email } });
+            if (authUser) {
+              await GamificationService.awardTaskPoints(
+                authUser.id,
+                task.id,
+                task.priority,
+                isEarly
               );
-            })}
-          </div>
-        </div>
-      </div>
+            }
+          }
+        } catch (err) {
+          console.error("Failed to award points:", err);
+        }
+      }
+    }
+    
+    const updated = await Task.findByPk(task.id, {
+      include: [{ model: User, as: "user", attributes: ["id","name","email","role"] }],
+    });
 
-      {/* Priority breakdown */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
-        <h2 className="text-sm font-bold text-gray-800 dark:text-white mb-1">Priority breakdown</h2>
-        <p className="text-xs text-gray-400 mb-5">Distribution by priority</p>
-        <div className="space-y-3">
-          {priCounts.map(({ label, count, color }) => (
-            <div key={label} className="flex items-center gap-3">
-              <span className="text-xs font-medium text-gray-600 dark:text-gray-300 w-16">{label}</span>
-              <div className="flex-1 bg-gray-100 dark:bg-gray-700 rounded-full h-2.5 overflow-hidden">
-                <div className="h-2.5 rounded-full transition-all duration-500"
-                  style={{ width: `${(count / maxPri) * 100}%`, background: color }}/>
-              </div>
-              <span className="text-xs font-semibold text-gray-700 dark:text-gray-300 w-6 text-right">{count}</span>
-            </div>
-          ))}
-        </div>
-      </div>
+    // Enrich with avatarColor from auth_users before returning
+    const updatedJson = updated.toJSON();
+    if (updatedJson.user && updatedJson.user.email) {
+      const authUser = await AuthUser.findOne({ 
+        where: { email: updatedJson.user.email },
+        attributes: ["avatarColor", "avatarUrl"]
+      });
+      if (authUser) {
+        updatedJson.user.avatarColor = authUser.avatarColor;
+        updatedJson.user.avatarUrl = authUser.avatarUrl;
+      }
+    }
 
-    </div>
-  );
-}
+    const newAssigneeEmail = updatedJson.user?.email;
+    const actorName = decoded.name || decoded.email;
+    const pid = updatedJson.project_id;
+    const tid = updatedJson.id;
+
+    // New assignee notification
+    if (newAssigneeEmail && newAssigneeEmail !== oldAssigneeEmail) {
+      await notify({
+        email: newAssigneeEmail, type: "assigned",
+        message: `📋 You've been assigned a task by ${actorName}`,
+        sub: updatedJson.title, taskId: tid, projectId: pid,
+      });
+    }
+
+    // Status changed
+    if (updateData.status && updateData.status !== oldStatus) {
+      const fromLabel = STATUS_LABEL[oldStatus] || oldStatus;
+      const toLabel = STATUS_LABEL[updateData.status] || updateData.status;
+      const projectUsers = await User.findAll({ where: { project_id: pid } });
+      for (const pu of projectUsers) {
+        if (!pu.email) continue;
+        const role = (pu.role || "").toLowerCase();
+        if (!["admin","developer"].includes(role)) continue;
+        const puAuth = await AuthUser.findOne({ where: { email: pu.email } });
+        if (puAuth && puAuth.id === decoded.id) continue;
+        await notify({
+          email: pu.email, type: "status",
+          message: `🔄 ${updatedJson.user?.name || actorName} moved "${updatedJson.title}"`,
+          sub: `${fromLabel} → ${toLabel}`, taskId: tid, projectId: pid,
+        });
+      }
+    }
+
+    res.json(updatedJson);  // Return enriched version
+  } catch (err) { 
+    console.error("Task update error:", err);
+    res.status(500).json({ message: err.message }); 
+  }
+});
+
+// PATCH /api/tasks/:id/status  — drag & drop
+router.patch("/:id/status", async (req, res) => {
+  const decoded = getAuth(req);
+  if (!decoded) return res.status(401).json({ message: "Not authenticated" });
+  try {
+    const task = await Task.findByPk(req.params.id, {
+      include: [{ model: User, as: "user", attributes: ["id","name","email","role"] }],
+    });
+    if (!task) return res.status(404).json({ message: "Not found" });
+
+    const oldStatus = task.status;
+    const newStatus = req.body.status;
+    const actorName = decoded.name || decoded.email;
+    const pid = task.project_id;
+    const tid = task.id;
+
+    await task.update({ status: newStatus });
+
+    const fromLabel = STATUS_LABEL[oldStatus] || oldStatus;
+    const toLabel = STATUS_LABEL[newStatus] || newStatus;
+
+    // Notify all admins/developers on the project
+    const projectUsers = await User.findAll({ where: { project_id: pid } });
+    for (const pu of projectUsers) {
+      if (!pu.email) continue;
+      const role = (pu.role || "").toLowerCase();
+      if (!["admin","developer"].includes(role)) continue;
+      const puAuth = await AuthUser.findOne({ where: { email: pu.email } });
+      if (puAuth && puAuth.id === decoded.id) continue;
+      await notify({
+        email: pu.email,
+        type: newStatus === "inreview" ? "review" : "status",
+        message: newStatus === "inreview"
+          ? `👀 "${task.title}" is ready for review`
+          : `🔄 ${task.user?.name || actorName} moved "${task.title}"`,
+        sub: `${fromLabel} → ${toLabel}`,
+        taskId: tid, projectId: pid,
+      });
+    }
+
+    // Notify assignee if someone else moved their task
+    if (task.user?.email && task.user.email !== decoded.email) {
+      await notify({
+        email: task.user.email, type: "status",
+        message: `🔄 Your task was moved by ${actorName}`,
+        sub: `"${task.title}": ${fromLabel} → ${toLabel}`,
+        taskId: tid, projectId: pid,
+      });
+    }
+
+    const updated = await Task.findByPk(tid, {
+      include: [{ model: User, as: "user", attributes: ["id","name","email","role"] }],
+    });
+    res.json(updated);
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+// DELETE /api/tasks/:id
+router.delete("/:id", async (req, res) => {
+  const decoded = getAuth(req);
+  if (!decoded) return res.status(401).json({ message: "Not authenticated" });
+  if (decoded.role !== "admin") return res.status(403).json({ message: "Only admins can delete tasks" });
+  try {
+    const task = await Task.findByPk(req.params.id);
+    if (!task) return res.status(404).json({ message: "Not found" });
+    await task.destroy();
+    res.json({ message: "Deleted" });
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+// POST /api/tasks/:id/review
+router.post("/:id/review", async (req, res) => {
+  const decoded = getAuth(req);
+  if (!decoded) return res.status(401).json({ message: "Not authenticated" });
+  if (!["admin","developer"].includes((decoded.role||"").toLowerCase()))
+    return res.status(403).json({ message: "Only admins and developers can review" });
+
+  try {
+    const task = await Task.findByPk(req.params.id, {
+      include: [{ model: User, as: "user", attributes: ["id","name","email","role"] }],
+    });
+    if (!task) return res.status(404).json({ message: "Not found" });
+
+    const { verdict, comment, fixDueDate, originalDueDate } = req.body;
+    const allowed = ["approved","needs_fix","partial"];
+    if (!allowed.includes(verdict)) return res.status(400).json({ message: "Invalid verdict" });
+    if (!comment?.trim()) return res.status(400).json({ message: "Comment required" });
+
+    let reviews = [];
+    try { reviews = task.reviews ? JSON.parse(task.reviews) : []; } catch { reviews = []; }
+
+    // Count total rejections so far
+    const rejectionCount = reviews.filter(r => r.verdict === "needs_fix" || r.verdict === "partial").length;
+
+    const storedOriginal = originalDueDate || task.dueDate || null;
+    const review = {
+      id: Date.now(),
+      reviewerId: decoded.id,
+      reviewerName: decoded.name || decoded.email,
+      verdict,
+      comment: comment.trim(),
+      fixDueDate: fixDueDate || null,
+      originalDueDate: storedOriginal,
+      rejectionNumber: verdict !== "approved" ? rejectionCount + 1 : null,
+      taskStatusBefore: task.status,
+      createdAt: new Date().toISOString(),
+    };
+    reviews.push(review);
+
+    const update = { reviews: JSON.stringify(reviews), reviewVerdict: verdict };
+    if (verdict === "needs_fix") {
+      update.status = "todo";
+      if (fixDueDate) update.dueDate = fixDueDate;
+    } else if (verdict === "partial") {
+      update.status = "inprogress";
+      if (fixDueDate) update.dueDate = fixDueDate;
+    }
+    await task.update(update);
+
+    // Notify the intern
+    if (task.user?.email) {
+      const VERDICT_MSG = {
+        approved: "✅ Your task was approved — great work!",
+        partial: "🔶 Your task needs minor fixes",
+        needs_fix: "❌ Your task needs to be redone",
+      };
+      await notify({
+        email: task.user.email,
+        type: verdict === "approved" ? "review" : "status",
+        message: VERDICT_MSG[verdict],
+        sub: `"${task.title}"${fixDueDate ? ` · Fix by ${fixDueDate}` : ""}`,
+        taskId: task.id,
+        projectId: task.project_id,
+      });
+    }
+
+    const updated = await Task.findByPk(task.id, {
+      include: [{ model: User, as: "user", attributes: ["id","name","email","role"] }],
+    });
+    
+    // AUTO-AWARD POINTS for reviewing
+    try {
+      await GamificationService.awardReviewPoints(decoded.id, task.id);
+    } catch (err) {
+      console.error("Failed to award review points:", err);
+    }
+    
+    res.json(updated);
+  } catch (err) {
+    console.error("Review error:", err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// GET /api/tasks/:id/reviews
+router.get("/:id/reviews", async (req, res) => {
+  const decoded = getAuth(req);
+  if (!decoded) return res.status(401).json({ message: "Not authenticated" });
+  try {
+    const task = await Task.findByPk(req.params.id);
+    if (!task) return res.status(404).json({ message: "Not found" });
+    let reviews = [];
+    try { reviews = task.reviews ? JSON.parse(task.reviews) : []; } catch { reviews = []; }
+    res.json(reviews);
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+module.exports = router;

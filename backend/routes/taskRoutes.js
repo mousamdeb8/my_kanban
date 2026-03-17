@@ -2,6 +2,7 @@ const express = require("express");
 const router  = express.Router();
 const jwt     = require("jsonwebtoken");
 const { Task, User, AuthUser, Notification } = require("../models");
+const GamificationService = require("../services/gamificationService");
 
 const getAuth = (req) => {
   try {
@@ -242,6 +243,31 @@ router.put("/:id", async (req, res) => {
 
     await task.update(updateData);
     
+    // AUTO-AWARD POINTS when task is completed
+    if (updateData.status === "done" && oldStatus !== "done") {
+      const isEarly = task.dueDate && new Date() < new Date(task.dueDate);
+      const userId = task.user_id || updateData.user_id;
+      if (userId) {
+        try {
+          // Get auth_user id from users table
+          const taskUser = await User.findByPk(userId);
+          if (taskUser) {
+            const authUser = await AuthUser.findOne({ where: { email: taskUser.email } });
+            if (authUser) {
+              await GamificationService.awardTaskPoints(
+                authUser.id,
+                task.id,
+                task.priority,
+                isEarly
+              );
+            }
+          }
+        } catch (err) {
+          console.error("Failed to award points:", err);
+        }
+      }
+    }
+    
     const updated = await Task.findByPk(task.id, {
       include: [{ model: User, as: "user", attributes: ["id","name","email","role"] }],
     });
@@ -438,6 +464,14 @@ router.post("/:id/review", async (req, res) => {
     const updated = await Task.findByPk(task.id, {
       include: [{ model: User, as: "user", attributes: ["id","name","email","role"] }],
     });
+    
+    // AUTO-AWARD POINTS for reviewing
+    try {
+      await GamificationService.awardReviewPoints(decoded.id, task.id);
+    } catch (err) {
+      console.error("Failed to award review points:", err);
+    }
+    
     res.json(updated);
   } catch (err) {
     console.error("Review error:", err);

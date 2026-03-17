@@ -119,9 +119,9 @@ function StatCard({ icon, label, value, color, sub }) {
   );
 }
 
-// ─────────────────────────────────────────────
+// 
 //  PROJECT CARD (WITH DELETE BUTTON)
-// ─────────────────────────────────────────────
+// 
 function ProjectCard({ project, onClick, onDelete, isAdmin }) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
