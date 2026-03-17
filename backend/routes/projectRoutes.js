@@ -2,7 +2,7 @@ const express = require("express");
 const router  = express.Router();
 const jwt     = require("jsonwebtoken");
 const { Op }  = require("sequelize");
-const { Project, Task, User, AuthUser, ProjectMember } = require("../models");
+const { Project, Task, User, AuthUser, ProjectMember, Notification } = require("../models");
 
 const getAuthUser = (req) => {
   try {
@@ -96,17 +96,66 @@ router.put("/:id", async (req, res) => {
   } catch (err) { res.status(500).json({ message: "Failed", error: err.message }); }
 });
 
-// ── DELETE /api/projects/:id ── Admin only ──
+// ── DELETE /api/projects/:id ── Admin only (CASCADE DELETES) ──
 router.delete("/:id", async (req, res) => {
   try {
     const decoded = getAuthUser(req);
-    if (!decoded || decoded.role !== "admin") return res.status(403).json({ message: "Admin only" });
-    const project = await Project.findByPk(req.params.id);
-    if (!project) return res.status(404).json({ message: "Not found" });
-    await ProjectMember.destroy({ where: { projectId: req.params.id } });
+    if (!decoded || decoded.role !== "admin") {
+      return res.status(403).json({ message: "Only admins can delete projects" });
+    }
+
+    const projectId = req.params.id;
+    const project = await Project.findByPk(projectId);
+    if (!project) return res.status(404).json({ message: "Project not found" });
+
+    const projectName = project.name;
+    console.log(`🗑️ Admin ${decoded.name} deleting project: ${projectName}`);
+
+    // CASCADE DELETE - Delete all related data in correct order
+    
+    // 1. Delete notifications
+    const deletedNotifications = await Notification.destroy({ 
+      where: { projectId } 
+    });
+    console.log(`  ✅ Deleted ${deletedNotifications} notifications`);
+
+    // 2. Delete tasks
+    const deletedTasks = await Task.destroy({ 
+      where: { project_id: projectId } 
+    });
+    console.log(`  ✅ Deleted ${deletedTasks} tasks`);
+
+    // 3. Delete project members
+    const deletedMembers = await ProjectMember.destroy({ 
+      where: { projectId } 
+    });
+    console.log(`  ✅ Deleted ${deletedMembers} project members`);
+
+    // 4. Delete users in users table for this project
+    const deletedUsers = await User.destroy({ 
+      where: { project_id: projectId } 
+    });
+    console.log(`  ✅ Deleted ${deletedUsers} user assignments`);
+
+    // 5. Finally delete the project
     await project.destroy();
-    res.json({ message: "Deleted" });
-  } catch (err) { res.status(500).json({ message: "Failed", error: err.message }); }
+    console.log(`  ✅ Deleted project: ${projectName}`);
+
+    res.json({ 
+      message: "Project deleted successfully",
+      projectName,
+      stats: {
+        notifications: deletedNotifications,
+        tasks: deletedTasks,
+        members: deletedMembers,
+        users: deletedUsers
+      }
+    });
+
+  } catch (err) {
+    console.error("❌ Delete project error:", err);
+    res.status(500).json({ message: "Failed to delete project", error: err.message });
+  }
 });
 
 // ── GET /api/projects/:id/members ──
