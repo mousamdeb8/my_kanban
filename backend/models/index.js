@@ -1,3 +1,6 @@
+// File: backend/models/index.js
+// Action: REPLACE EXISTING FILE
+
 const { DataTypes } = require("sequelize");
 const sequelize     = require("../database");
 
@@ -7,6 +10,13 @@ const AuthUser      = require("./AuthUser")(sequelize, DataTypes);
 const Notification  = require("./Notification")(sequelize, DataTypes);
 const Project       = require("./Project")(sequelize, DataTypes);
 const ProjectMember = require("./ProjectMember")(sequelize, DataTypes);
+
+// NEW: Gamification models
+const UserPoint = require("./UserPoint")(sequelize, DataTypes);
+const Achievement = require("./Achievement")(sequelize, DataTypes);
+const UserAchievement = require("./UserAchievement")(sequelize, DataTypes);
+const PointTransaction = require("./PointTransaction")(sequelize, DataTypes);
+
 
 // ── Task <-> User ──
 User.hasMany(Task,   { foreignKey: "user_id", as: "tasks" });
@@ -32,4 +42,31 @@ AuthUser.hasMany(ProjectMember,   { foreignKey: "userId", as: "projectMembership
 AuthUser.belongsTo(AuthUser, { as: "mentor",  foreignKey: "mentorId" });
 AuthUser.hasMany(AuthUser,   { as: "mentees", foreignKey: "mentorId" });
 
-module.exports = { sequelize, User, Task, AuthUser, Notification, Project, ProjectMember };
+// ── NEW: Gamification associations ──
+UserPoint.belongsTo(AuthUser, { foreignKey: "user_id", as: "user" });
+AuthUser.hasOne(UserPoint, { foreignKey: "user_id", as: "points" });
+
+UserAchievement.belongsTo(AuthUser, { foreignKey: "user_id", as: "user" });
+UserAchievement.belongsTo(Achievement, { foreignKey: "achievement_id", as: "achievement" });
+AuthUser.hasMany(UserAchievement, { foreignKey: "user_id", as: "achievements" });
+Achievement.hasMany(UserAchievement, { foreignKey: "achievement_id", as: "userAchievements" });
+
+PointTransaction.belongsTo(AuthUser, { foreignKey: "user_id", as: "user" });
+PointTransaction.belongsTo(Task, { foreignKey: "task_id", as: "task" });
+AuthUser.hasMany(PointTransaction, { foreignKey: "user_id", as: "transactions" });
+Task.hasMany(PointTransaction, { foreignKey: "task_id", as: "pointTransactions" });
+
+module.exports = { 
+  sequelize, 
+  User, 
+  Task, 
+  AuthUser, 
+  Notification, 
+  Project, 
+  ProjectMember,
+  // NEW: Export gamification models
+  UserPoint,
+  Achievement,
+  UserAchievement,
+  PointTransaction
+};
