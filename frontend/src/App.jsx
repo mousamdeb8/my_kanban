@@ -1,9 +1,11 @@
+// File: frontend/src/App.jsx
+// Action: REPLACE EXISTING FILE
+
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "react-hot-toast";
 import { ThemeProvider }        from "./context/ThemeContext";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { NotificationProvider } from "./context/NotificationContext";
-
 
 import Login          from "./pages/Login";
 import Register       from "./pages/Register";
@@ -19,7 +21,6 @@ import TeamMembers    from "./pages/TeamMembers";
 import AdminAccounts from "./pages/AdminAccounts";
 import Achievements from "./pages/Achievements";
 import Profile from "./pages/Profile";
-
 
 function PrivateRoute({ children }) {
   const { user, loading } = useAuth();
@@ -40,27 +41,32 @@ function PublicRoute({ children }) {
 function AppRoutes() {
   return (
     <Routes>
+      {/* Public routes */}
       <Route path="/login"           element={<PublicRoute><Login/></PublicRoute>}/>
       <Route path="/register"        element={<PublicRoute><Register/></PublicRoute>}/>
       <Route path="/forgot-password" element={<PublicRoute><ForgotPassword/></PublicRoute>}/>
       <Route path="/reset-password"  element={<ResetPassword/>}/>
-      <Route path="/achievements" element={<Achievements />} />
-      <Route path="/profile" element={<Profile />} />
 
+      {/* Top-level private routes */}
       <Route path="/" element={<PrivateRoute><Navigate to="/projects" replace/></PrivateRoute>}/>
       <Route path="/projects" element={<PrivateRoute><Projects/></PrivateRoute>}/>
+      
+      {/* Gamification routes (global) */}
+      <Route path="/achievements" element={<PrivateRoute><Achievements /></PrivateRoute>} />
+      <Route path="/profile" element={<PrivateRoute><Profile /></PrivateRoute>} />
+
+      {/* Project-specific routes */}
       <Route path="/projects/:projectId" element={<PrivateRoute><Layout/></PrivateRoute>}>
         <Route index element={<Navigate to="summary" replace/>}/>
         <Route path="summary"  element={<Summary/>}/>
         <Route path="board"    element={<Home/>}/>
         <Route path="timeline" element={<Timeline/>}/>
         <Route path="team"     element={<TeamMembers/>}/>
-        <Route path="settings"    element={<Settings/>}/>
-        <Route path="accounts"   element={<AdminAccounts/>}/>
-        <Route path="/achievements" element={<Achievements />} />
-        <Route path="/profile" element={<Profile />} /> 
+        <Route path="settings" element={<Settings/>}/>
+        <Route path="accounts" element={<AdminAccounts/>}/>
       </Route>
 
+      {/* Catch-all */}
       <Route path="*" element={<Navigate to="/login" replace/>}/>
     </Routes>
   );
