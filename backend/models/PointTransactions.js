@@ -1,6 +1,5 @@
 // File: backend/models/PointTransaction.js
-// Action: NEW FILE
-
+//Modified
 module.exports = (sequelize, DataTypes) => {
   const PointTransaction = sequelize.define("PointTransaction", {
     id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
