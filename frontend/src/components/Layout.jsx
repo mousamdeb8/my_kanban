@@ -1,3 +1,7 @@
+// File: frontend/src/components/Layout.jsx
+// Action: REPLACE EXISTING FILE
+// Changes: Added Achievements and Profile to NAV array (lines 19-20)
+
 import { NavLink, Outlet, useParams, useNavigate } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
 import { useTheme } from "../context/ThemeContext";
@@ -17,6 +21,8 @@ const NAV = [
   { key: "board",    label: "Board",    icon: "⊟" },
   { key: "timeline", label: "Timeline", icon: "≡" },
   { key: "team",     label: "Team",     icon: "👥" },
+  { key: "achievements", label: "Achievements", icon: "🏆", isGlobal: true },
+  { key: "profile",  label: "Profile",  icon: "👤", isGlobal: true },
   { key: "accounts", label: "Accounts",  icon: "🔐", adminOnly: true },
 ];
 
@@ -142,7 +148,9 @@ export default function Layout() {
           {/* Nav */}
           <nav className="flex-1 px-2 py-3 space-y-0.5">
             {NAV.filter(item => !item.adminOnly || isAdmin).map(item => (
-              <NavLink key={item.key} to={`/projects/${projectId}/${item.key}`}
+              <NavLink 
+                key={item.key} 
+                to={item.isGlobal ? `/${item.key}` : `/projects/${projectId}/${item.key}`}
                 className={({ isActive }) =>
                   `flex items-center gap-2.5 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
                     isActive ? "bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400"
