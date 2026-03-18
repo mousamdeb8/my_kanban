@@ -4,6 +4,7 @@ import { ThemeProvider }        from "./context/ThemeContext";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { NotificationProvider } from "./context/NotificationContext";
 
+
 import Login          from "./pages/Login";
 import Register       from "./pages/Register";
 import ForgotPassword from "./pages/ForgotPassword";
@@ -16,6 +17,9 @@ import Timeline       from "./pages/Timeline";
 import Settings       from "./pages/Settings";
 import TeamMembers    from "./pages/TeamMembers";
 import AdminAccounts from "./pages/AdminAccounts";
+import Achievements from "./pages/Achievements";
+import Profile from "./pages/Profile";
+
 
 function PrivateRoute({ children }) {
   const { user, loading } = useAuth();
@@ -40,6 +44,8 @@ function AppRoutes() {
       <Route path="/register"        element={<PublicRoute><Register/></PublicRoute>}/>
       <Route path="/forgot-password" element={<PublicRoute><ForgotPassword/></PublicRoute>}/>
       <Route path="/reset-password"  element={<ResetPassword/>}/>
+      <Route path="/achievements" element={<Achievements />} />
+      <Route path="/profile" element={<Profile />} />
 
       <Route path="/" element={<PrivateRoute><Navigate to="/projects" replace/></PrivateRoute>}/>
       <Route path="/projects" element={<PrivateRoute><Projects/></PrivateRoute>}/>
@@ -51,6 +57,8 @@ function AppRoutes() {
         <Route path="team"     element={<TeamMembers/>}/>
         <Route path="settings"    element={<Settings/>}/>
         <Route path="accounts"   element={<AdminAccounts/>}/>
+        <Route path="/achievements" element={<Achievements />} />
+        <Route path="/profile" element={<Profile />} /> 
       </Route>
 
       <Route path="*" element={<Navigate to="/login" replace/>}/>
