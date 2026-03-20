@@ -2,4 +2,95 @@
 body {
   font-family: system-ui, sans-serif;
 }
+.dark {
+  color-scheme: light !important;
+}
+ 
+/* Force light backgrounds */
+.dark\:bg-gray-900,
+.dark\:bg-slate-900,
+.dark\:bg-gray-800 {
+  background-color: #f9fafb !important; /* Light gray background */
+}
+ 
+/* Force white cards */
+.dark\:bg-gray-800 {
+  background-color: #ffffff !important;
+}
+ 
+/* Force dark text */
+.dark\:text-white,
+.dark\:text-gray-200,
+.dark\:text-gray-100 {
+  color: #111827 !important; /* Dark gray text */
+}
+ 
+/* Force light borders */
+.dark\:border-gray-700,
+.dark\:border-gray-600 {
+  border-color: #e5e7eb !important; /* Light gray border */
+}
+ 
+/* Force light hover states */
+.dark\:hover\:bg-gray-700,
+.dark\:hover\:bg-gray-800 {
+  background-color: #f3f4f6 !important;
+}
+ 
+/* Force light input backgrounds */
+.dark\:bg-gray-700 {
+  background-color: #f9fafb !important;
+}
+ 
+/* Card backgrounds */
+.bg-slate-900,
+.bg-gray-900,
+.bg-gray-800 {
+  background-color: #ffffff !important;
+}
+ 
+/* Text colors */
+.text-gray-400 {
+  color: #6b7280 !important;
+}
+ 
+/* Border colors */
+.border-gray-700,
+.border-gray-600 {
+  border-color: #e5e7eb !important;
+}
+ 
+/* ============================================
+   SPECIFIC BOARD PAGE OVERRIDES
+   ============================================ */
+ 
+/* Board page background */
+[class*="Board"] {
+  background-color: #f9fafb !important;
+}
+ 
+/* Kanban columns */
+[class*="kanban"] {
+  background-color: #f3f4f6 !important;
+  border-color: #e5e7eb !important;
+}
+ 
+/* Task cards */
+[class*="task-card"],
+[class*="Task"] {
+  background-color: #ffffff !important;
+  border-color: #e5e7eb !important;
+  color: #111827 !important;
+}
+ 
+/* Summary page */
+[class*="Summary"] {
+  background-color: #f9fafb !important;
+}
+ 
+/* Charts */
+[class*="chart"] {
+  background-color: #ffffff !important;
+}
+ 
 
