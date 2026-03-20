@@ -1,3 +1,7 @@
+// File: frontend/src/pages/Home.jsx
+// Action: REPLACE EXISTING FILE
+// Changes: Light mode colors + fix any undefined variable errors
+
 import { useState, useEffect, useRef } from "react";
 import { useParams, useLocation } from "react-router-dom";
 import { DndContext, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
@@ -39,12 +43,10 @@ export default function Home() {
   const [filterPriority, setFilterPriority] = useState("");
   const [filterAssignee, setFilterAssignee] = useState("");
 
-  // Track which overdue tasks we've already notified about (per session)
   const notifiedOverdue = useRef(new Set());
 
   const authHeaders = { "Content-Type": "application/json", Authorization: `Bearer ${token}` };
 
-  // Auto-open task when navigated from a notification (e.g. ?taskId=42)
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const taskId = params.get("taskId");
@@ -63,11 +65,12 @@ export default function Home() {
       const list = Array.isArray(data) ? data : [];
       setTasks(list);
 
-      // Fire overdue notifications ONCE per task per session (not on every render)
-      const now = new Date(); now.setHours(0,0,0,0);
+      const now = new Date(); 
+      now.setHours(0,0,0,0);
       list.forEach(t => {
         if (!t.dueDate || t.status === "done") return;
-        const due = new Date(t.dueDate); due.setHours(0,0,0,0);
+        const due = new Date(t.dueDate); 
+        due.setHours(0,0,0,0);
         if (due < now && !notifiedOverdue.current.has(t.id)) {
           notifiedOverdue.current.add(t.id);
           addNotification({
@@ -77,10 +80,15 @@ export default function Home() {
           });
         }
       });
-    } catch { toast.error("Failed to load tasks"); }
+    } catch (err) { 
+      console.error("Failed to load tasks:", err);
+      toast.error("Failed to load tasks"); 
+    }
   };
 
-  useEffect(() => { if (token) loadTasks(); }, [projectId, token]);
+  useEffect(() => { 
+    if (token && projectId) loadTasks(); 
+  }, [projectId, token]);
 
   const handleDragEnd = async ({ active, over }) => {
     if (!over) return;
@@ -105,12 +113,15 @@ export default function Home() {
       if (res.ok) {
         const colName = COLUMNS.find(c => c.id === newStatus)?.name || newStatus;
         toast.success(`Moved to ${colName}`);
-        // Notification for status change
         if (newStatus === "inreview") {
           addNotification({ type: "review", message: `"${dragged.title}" moved to In Review`, sub: `Assigned to ${dragged.user?.name || "Unassigned"}` });
         }
       } else { const d = await res.json(); toast.error(d.message || "Failed"); loadTasks(); }
-    } catch { toast.error("Failed"); loadTasks(); }
+    } catch (err) { 
+      console.error("Drag error:", err);
+      toast.error("Failed"); 
+      loadTasks(); 
+    }
   };
 
   const handleCreateTask = async (task) => {
@@ -123,15 +134,16 @@ export default function Home() {
         const newTask = await res.json();
         setTasks(prev => [...prev, newTask]);
         toast.success("Task created!");
-        // Notify assignee
         if (newTask.user?.name) {
           addNotification({ type: "assigned", message: `New task assigned to ${newTask.user.name}`, sub: newTask.title });
         }
       } else { const d = await res.json(); toast.error(d.message || "Failed"); }
-    } catch { toast.error("Failed to create task"); }
+    } catch (err) { 
+      console.error("Create task error:", err);
+      toast.error("Failed to create task"); 
+    }
   };
 
-  // Called after review is submitted — just refreshes local task state, no PUT
   const handleTaskReviewed = (updatedTask) => {
     setTasks(p => p.map(t => t.id === updatedTask.id ? updatedTask : t));
     setEditTask(null);
@@ -149,7 +161,6 @@ export default function Home() {
         setEditTask(null);
         toast.success("Task updated!");
 
-        // Notifications
         if (prev?.user_id !== task.user_id && task.user_id) {
           addNotification({ type: "assigned", message: `Task assigned to ${updated.user?.name || "someone"}`, sub: updated.title });
         }
@@ -160,7 +171,10 @@ export default function Home() {
           addNotification({ type: "status", message: `Status changed to ${task.status}`, sub: updated.title });
         }
       } else { const d = await res.json(); toast.error(d.message || "Failed"); }
-    } catch { toast.error("Failed to update"); }
+    } catch (err) { 
+      console.error("Update task error:", err);
+      toast.error("Failed to update"); 
+    }
   };
 
   const handleDeleteTask = async (id) => {
@@ -169,7 +183,10 @@ export default function Home() {
       const res = await fetch(`${API}/api/tasks/${id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
       if (res.ok) { setTasks(prev => prev.filter(t => t.id !== id)); setEditTask(null); toast.success("Deleted"); }
       else { const d = await res.json(); toast.error(d.message || "Failed"); }
-    } catch { toast.error("Failed to delete"); }
+    } catch (err) { 
+      console.error("Delete task error:", err);
+      toast.error("Failed to delete"); 
+    }
   };
 
   const canEditThisTask = (task) => {
@@ -186,29 +203,29 @@ export default function Home() {
   });
 
   return (
-    <div className="flex flex-col h-full dark:bg-gray-900">
+    <div className="flex flex-col h-full bg-gray-50">
       <Toaster position="top-right" toastOptions={{ duration: 3000 }}/>
 
-      {/* Header */}
-      <div className="flex items-center justify-between px-6 py-3.5 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex-shrink-0">
-        <h1 className="text-sm font-bold text-gray-800 dark:text-white tracking-widest">BOARD</h1>
+      {/* Header - LIGHT MODE */}
+      <div className="flex items-center justify-between px-6 py-3.5 border-b border-gray-200 bg-white flex-shrink-0">
+        <h1 className="text-sm font-bold text-gray-800 tracking-widest">BOARD</h1>
         <div className="flex items-center gap-2.5">
           <div className="relative">
             <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <circle cx="11" cy="11" r="8" strokeWidth="2"/><path d="m21 21-4.35-4.35" strokeWidth="2"/>
             </svg>
             <input placeholder="Search board..." value={searchText} onChange={e => setSearchText(e.target.value)}
-              className="pl-8 pr-3 py-1.5 border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg text-xs w-40 focus:outline-none focus:border-blue-400"/>
+              className="pl-8 pr-3 py-1.5 border border-gray-200 bg-gray-50 rounded-lg text-xs w-40 focus:outline-none focus:border-blue-400"/>
           </div>
           <select value={filterPriority} onChange={e => setFilterPriority(e.target.value)}
-            className="px-2 py-1.5 border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg text-xs focus:outline-none">
+            className="px-2 py-1.5 border border-gray-200 bg-white rounded-lg text-xs focus:outline-none">
             <option value="">Priority</option>
             <option value="High">🔴 High</option>
             <option value="Medium">🟡 Medium</option>
             <option value="Low">🔵 Low</option>
           </select>
           <select value={filterAssignee} onChange={e => setFilterAssignee(e.target.value)}
-            className="px-2 py-1.5 border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg text-xs focus:outline-none">
+            className="px-2 py-1.5 border border-gray-200 bg-white rounded-lg text-xs focus:outline-none">
             <option value="">Assignee</option>
             {[...new Map(tasks.map(t => [t.user_id, t.user])).values()].filter(Boolean).map(u => (
               <option key={u.id} value={u.id}>{u.name}</option>
@@ -221,21 +238,21 @@ export default function Home() {
             </button>
           )}
           {isMember && (
-            <span className="text-[10px] px-2.5 py-1 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-300 rounded-lg font-medium border border-blue-100">
+            <span className="text-[10px] px-2.5 py-1 bg-blue-50 text-blue-600 rounded-lg font-medium border border-blue-100">
               👁 View & move only
             </span>
           )}
           {isIntern && (
-            <span className="text-[10px] px-2.5 py-1 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-300 rounded-lg font-medium border border-green-100">
+            <span className="text-[10px] px-2.5 py-1 bg-green-50 text-green-600 rounded-lg font-medium border border-green-100">
               🌱 Own tasks only
             </span>
           )}
         </div>
       </div>
 
-      {/* Board */}
+      {/* Board - LIGHT MODE */}
       <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
-        <div className="flex gap-4 p-5 overflow-x-auto flex-1 items-start">
+        <div className="flex gap-4 p-5 overflow-x-auto flex-1 items-start bg-gray-50">
           {COLUMNS.map(col => (
             <Column
               key={col.id}
