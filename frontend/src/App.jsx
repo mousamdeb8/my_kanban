@@ -1,5 +1,6 @@
 // File: frontend/src/App.jsx
 // Action: REPLACE EXISTING FILE
+// Changes: Wrap Achievements and Profile with GlobalLayout
 
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "react-hot-toast";
@@ -13,6 +14,7 @@ import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword  from "./pages/ResetPassword";
 import Projects       from "./pages/Projects";
 import Layout         from "./components/Layout";
+import GlobalLayout   from "./components/GlobalLayout";
 import Summary        from "./pages/Summary";
 import Home           from "./pages/Home";
 import Timeline       from "./pages/Timeline";
@@ -51,9 +53,21 @@ function AppRoutes() {
       <Route path="/" element={<PrivateRoute><Navigate to="/projects" replace/></PrivateRoute>}/>
       <Route path="/projects" element={<PrivateRoute><Projects/></PrivateRoute>}/>
       
-      {/* Gamification routes (global) */}
-      <Route path="/achievements" element={<PrivateRoute><Achievements /></PrivateRoute>} />
-      <Route path="/profile" element={<PrivateRoute><Profile /></PrivateRoute>} />
+      {/* Gamification routes (global) - WRAPPED with GlobalLayout */}
+      <Route path="/achievements" element={
+        <PrivateRoute>
+          <GlobalLayout>
+            <Achievements />
+          </GlobalLayout>
+        </PrivateRoute>
+      } />
+      <Route path="/profile" element={
+        <PrivateRoute>
+          <GlobalLayout>
+            <Profile />
+          </GlobalLayout>
+        </PrivateRoute>
+      } />
 
       {/* Project-specific routes */}
       <Route path="/projects/:projectId" element={<PrivateRoute><Layout/></PrivateRoute>}>
