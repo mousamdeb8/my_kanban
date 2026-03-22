@@ -1,4 +1,4 @@
-x// File: frontend/src/components/GlobalLayout.jsx
+// File: frontend/src/components/GlobalLayout.jsx
 // Action: NEW FILE
 // Purpose: Provides navigation for Profile and Achievements pages
 
