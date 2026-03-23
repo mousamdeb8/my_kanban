@@ -1,6 +1,6 @@
-// File: frontend/src/pages/Login.jsx
+/// File: frontend/src/pages/Login.jsx
 // Action: REPLACE EXISTING FILE
-// Changes: Light mode + modern gradient background
+// Fix: Call login(token, user) instead of login(user, token)
 
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
@@ -27,13 +27,15 @@ export default function Login() {
       });
       const data = await res.json();
       if (res.ok) {
-        login(data.user, data.token);
+        // FIX: Your AuthContext expects (token, user, remember)
+        login(data.token, data.user, remember);
         toast.success("Welcome back!");
         navigate("/projects");
       } else {
         toast.error(data.message || "Login failed");
       }
     } catch (err) {
+      console.error("Login error:", err);
       toast.error("Login failed. Please try again.");
     }
   };
