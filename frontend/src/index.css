@@ -1,96 +1,119 @@
-/* index.css */
-body {
-  font-family: system-ui, sans-serif;
-}
-.dark {
-  color-scheme: light !important;
-}
- 
-/* Force light backgrounds */
-.dark\:bg-gray-900,
+/* File: frontend/src/index.css
+   Action: ADD TO THE END OF EXISTING FILE
+   Purpose: Force light mode on ALL pages */
+
+/* ============================================
+   GLOBAL LIGHT MODE OVERRIDE
+   ============================================ */
+
+/* Remove ALL dark backgrounds */
+body,
+#root,
+[class*="bg-slate"],
+[class*="bg-gray-9"],
+[class*="bg-gray-8"],
 .dark\:bg-slate-900,
-.dark\:bg-gray-800 {
-  background-color: #f9fafb !important; /* Light gray background */
+.dark\:bg-gray-900,
+.dark\:bg-gray-800,
+.dark\:bg-gray-700 {
+  background-color: #f9fafb !important;
+  color: #111827 !important;
 }
- 
-/* Force white cards */
-.dark\:bg-gray-800 {
+
+/* White cards and panels */
+.dark\:bg-gray-800,
+[class*="bg-gray-8"] {
   background-color: #ffffff !important;
 }
- 
-/* Force dark text */
-.dark\:text-white,
-.dark\:text-gray-200,
-.dark\:text-gray-100 {
-  color: #111827 !important; /* Dark gray text */
-}
- 
-/* Force light borders */
+
+/* Light borders */
 .dark\:border-gray-700,
-.dark\:border-gray-600 {
-  border-color: #e5e7eb !important; /* Light gray border */
+.dark\:border-gray-600,
+[class*="border-gray-7"],
+[class*="border-gray-6"] {
+  border-color: #e5e7eb !important;
 }
- 
-/* Force light hover states */
+
+/* Dark text */
+.dark\:text-white,
+.dark\:text-gray-100,
+.dark\:text-gray-200,
+[class*="text-white"] {
+  color: #111827 !important;
+}
+
+/* Light text (for labels) */
+.dark\:text-gray-400,
+.dark\:text-gray-500 {
+  color: #6b7280 !important;
+}
+
+/* Input backgrounds */
+input,
+select,
+textarea,
+.dark\:bg-gray-700 {
+  background-color: #f9fafb !important;
+  border-color: #d1d5db !important;
+  color: #111827 !important;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  background-color: #ffffff !important;
+  border-color: #3b82f6 !important;
+}
+
+/* Hover states */
 .dark\:hover\:bg-gray-700,
 .dark\:hover\:bg-gray-800 {
   background-color: #f3f4f6 !important;
 }
- 
-/* Force light input backgrounds */
-.dark\:bg-gray-700 {
-  background-color: #f9fafb !important;
-}
- 
-/* Card backgrounds */
-.bg-slate-900,
-.bg-gray-900,
-.bg-gray-800 {
-  background-color: #ffffff !important;
-}
- 
-/* Text colors */
-.text-gray-400 {
-  color: #6b7280 !important;
-}
- 
-/* Border colors */
-.border-gray-700,
-.border-gray-600 {
-  border-color: #e5e7eb !important;
-}
- 
-/* ============================================
-   SPECIFIC BOARD PAGE OVERRIDES
-   ============================================ */
- 
-/* Board page background */
-[class*="Board"] {
-  background-color: #f9fafb !important;
-}
- 
-/* Kanban columns */
-[class*="kanban"] {
+
+/* Board columns */
+[class*="Column"],
+[class*="column"] {
   background-color: #f3f4f6 !important;
   border-color: #e5e7eb !important;
 }
- 
+
 /* Task cards */
-[class*="task-card"],
-[class*="Task"] {
+[class*="Task"],
+[class*="task"],
+[class*="card"] {
   background-color: #ffffff !important;
   border-color: #e5e7eb !important;
   color: #111827 !important;
 }
- 
-/* Summary page */
-[class*="Summary"] {
+
+/* Settings page specific */
+.bg-slate-950,
+.bg-black {
   background-color: #f9fafb !important;
 }
- 
-/* Charts */
-[class*="chart"] {
+
+/* Modals */
+[class*="modal"],
+[class*="Modal"] {
   background-color: #ffffff !important;
 }
- 
 
+/* Ensure text visibility */
+* {
+  color: inherit;
+}
+
+h1, h2, h3, h4, h5, h6,
+p, span, div, label {
+  color: #111827 !important;
+}
+
+/* Keep only intentional colors */
+.text-blue-600,
+.text-green-600,
+.text-red-600,
+.text-orange-600,
+.text-purple-600 {
+  color: inherit !important; /* Don't override colored text */
+}
