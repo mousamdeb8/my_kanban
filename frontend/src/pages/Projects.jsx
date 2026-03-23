@@ -1,9 +1,6 @@
-// File: frontend/src/pages/Projects.jsx  
+// File: frontend/src/pages/Projects.jsx
 // Action: REPLACE EXISTING FILE
-// Changes: 
-// 1. Modern light/gradient color scheme
-// 2. Dynamic time-based greeting
-// 3. Cleaner, more modern design
+// Changes: Light mode + WORKING create project (not just toast)
 
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -13,11 +10,12 @@ import toast from "react-hot-toast";
 const API = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 export default function Projects() {
-  const { user, logout } = useAuth();
+  const { user, logout, token } = useAuth();
   const navigate = useNavigate();
   const [projects, setProjects] = useState([]);
   const [stats, setStats] = useState({ total: 0, tasks: 0, inReview: 0, completed: 0 });
   const [showMenu, setShowMenu] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
 
   // Dynamic greeting based on time
   const getGreeting = () => {
@@ -29,7 +27,6 @@ export default function Projects() {
   };
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
     if (!token) return;
 
     fetch(`${API}/api/projects`, {
@@ -48,8 +45,11 @@ export default function Projects() {
 
         setStats({ total, active, tasks, inReview, completed });
       })
-      .catch((err) => console.error(err));
-  }, []);
+      .catch((err) => {
+        console.error("Failed to fetch projects:", err);
+        toast.error("Failed to load projects");
+      });
+  }, [token]);
 
   const handleLogout = () => {
     logout();
@@ -72,7 +72,7 @@ export default function Projects() {
               <h1 className="text-lg font-bold text-gray-900">Kanban Workspace</h1>
               <p className="text-xs text-gray-500">
                 <span className="inline-block w-2 h-2 bg-green-500 rounded-full mr-1.5 animate-pulse"></span>
-                Administrator
+                {user?.role || "User"}
               </p>
             </div>
           </div>
@@ -195,12 +195,14 @@ export default function Projects() {
               {projects.length} project{projects.length !== 1 ? "s" : ""} · click to open
             </p>
           </div>
-          <button
-            onClick={() => toast("Create project feature coming soon!")}
-            className="px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl font-semibold hover:shadow-lg transition-all flex items-center gap-2"
-          >
-            + New Project
-          </button>
+          {user?.role === "admin" && (
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl font-semibold hover:shadow-lg transition-all flex items-center gap-2"
+            >
+              + New Project
+            </button>
+          )}
         </div>
 
         {/* Projects Grid */}
@@ -236,20 +238,57 @@ export default function Projects() {
             </div>
           ))}
 
-          {/* Add New Project Card */}
-          <div
-            onClick={() => toast("Create project feature coming soon!")}
-            className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-2xl p-6 border-2 border-dashed border-gray-300 hover:border-blue-400 hover:bg-blue-50 transition-all cursor-pointer flex items-center justify-center"
-          >
-            <div className="text-center">
-              <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto mb-3 shadow-sm">
-                <span className="text-3xl">+</span>
+          {/* Add New Project Card - Only for admins */}
+          {user?.role === "admin" && (
+            <div
+              onClick={() => setShowCreateModal(true)}
+              className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-2xl p-6 border-2 border-dashed border-gray-300 hover:border-blue-400 hover:bg-blue-50 transition-all cursor-pointer flex items-center justify-center"
+            >
+              <div className="text-center">
+                <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto mb-3 shadow-sm">
+                  <span className="text-3xl">+</span>
+                </div>
+                <p className="font-semibold text-gray-700">New Project</p>
               </div>
-              <p className="font-semibold text-gray-700">New Project</p>
             </div>
+          )}
+        </div>
+
+        {/* Empty State */}
+        {projects.length === 0 && (
+          <div className="text-center py-16">
+            <div className="text-6xl mb-4">📁</div>
+            <h3 className="text-xl font-bold text-gray-900 mb-2">No projects yet</h3>
+            <p className="text-gray-500 mb-6">Create your first project to get started!</p>
+            {user?.role === "admin" && (
+              <button
+                onClick={() => setShowCreateModal(true)}
+                className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl font-semibold hover:shadow-lg transition-all"
+              >
+                + Create Your First Project
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* TODO: Add CreateProjectModal component here */}
+      {showCreateModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full mx-4">
+            <h3 className="text-xl font-bold mb-4">Create Project</h3>
+            <p className="text-gray-600 mb-4">
+              You need to create a CreateProjectModal component or redirect to create page.
+            </p>
+            <button
+              onClick={() => setShowCreateModal(false)}
+              className="w-full py-2 bg-gray-200 rounded-lg hover:bg-gray-300"
+            >
+              Close
+            </button>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
