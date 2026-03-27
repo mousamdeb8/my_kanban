@@ -1,0 +1,59 @@
+# Dependencies
+node_modules
+npm-debug.log
+yarn-error.log
+package-lock.json
+
+# Build files (will be rebuilt in Docker)
+dist
+build
+.next
+.nuxt
+.output
+.cache
+
+# Environment files
+.env
+.env.local
+.env.production
+.env.development
+.env.test
+
+# Git
+.git
+.gitignore
+.github
+
+# Testing
+coverage
+.nyc_output
+*.test.js
+*.test.jsx
+*.spec.js
+*.spec.jsx
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+.DS_Store
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+logs
+*.log
+npm-debug.log*
+
+# Documentation
+*.md
+README.md
+
+# Docker
+Dockerfile
+.dockerignore
+docker-compose.yml
+nginx.conf

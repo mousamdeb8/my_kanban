@@ -1,0 +1,78 @@
+# Docker Compose Configuration
+# Location: docker-compose.yml
+# Usage: docker-compose up -d
+
+version: '3.8'
+
+services:
+  # Backend Service
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: kanban-backend
+    ports:
+      - "8000:8000"
+    environment:
+      # Database
+      DATABASE_HOST: ${DATABASE_HOST}
+      DATABASE_PORT: ${DATABASE_PORT:-3306}
+      DATABASE_NAME: ${DATABASE_NAME}
+      DATABASE_USER: ${DATABASE_USER}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+      
+      # JWT
+      JWT_SECRET: ${JWT_SECRET}
+      
+      # SendGrid
+      SENDGRID_API_KEY: ${SENDGRID_API_KEY}
+      SENDGRID_FROM_EMAIL: ${SENDGRID_FROM_EMAIL}
+      
+      # Environment
+      NODE_ENV: production
+      PORT: 8000
+    
+    restart: unless-stopped
+    networks:
+      - kanban-network
+    
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Frontend Service
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: kanban-frontend
+    ports:
+      - "80:80"
+    environment:
+      VITE_API_URL: http://backend:8000
+    
+    depends_on:
+      backend:
+        condition: service_healthy
+    
+    restart: unless-stopped
+    networks:
+      - kanban-network
+    
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+networks:
+  kanban-network:
+    driver: bridge
+
+# Volumes (optional - for persistent data)
+# volumes:
+#   mysql-data:
