@@ -13,7 +13,6 @@ on:
 env:
   DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
   DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
-  RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
 
 jobs:
   # Job 1: Build and Test
@@ -107,7 +106,7 @@ jobs:
           echo "📦 ${{ secrets.DOCKER_USERNAME }}/kanban-backend:latest"
           echo "📦 ${{ secrets.DOCKER_USERNAME }}/kanban-frontend:latest"
 
-  # Job 3: Deploy to Railway
+  # Job 3: Deploy (Railway auto-deploys from GitHub push)
   deploy:
     name: Deploy to Cloud
     runs-on: ubuntu-latest
@@ -115,25 +114,11 @@ jobs:
     if: github.ref == 'refs/heads/main'
     
     steps:
-      - name: 📥 Checkout Code
-        uses: actions/checkout@v4
-      
-      - name: 🚂 Install Railway CLI
-        run: npm install -g @railway/cli
-      
-      - name: 🚀 Deploy to Railway
-        run: railway up --project f0bcd233-770f-4d13-8fb3-2368447742b1 --environment production --service kanban-backend
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-      
-      - name: ✅ Deployment Success
-        run: echo "✅ Application deployed successfully!"
-      
-      - name: 📝 Deployment Summary
+      - name: 🚀 Deploy triggered
         run: |
-          echo "🎉 Deployment Complete!"
-          echo "Backend: https://kanban-backend.railway.app"
-          echo "Frontend: https://kanban-frontend.railway.app"
+          echo "🚂 Railway auto-deploys from GitHub push!"
+          echo "✅ Backend: Railway will deploy from /backend"
+          echo "✅ Frontend: Railway will deploy from /frontend"
 
   # Job 4: Notify on Success/Failure
   notify:
@@ -147,7 +132,7 @@ jobs:
         if: ${{ needs.deploy.result == 'success' }}
         run: |
           echo "✅ CI/CD Pipeline Completed Successfully!"
-          echo "🚀 Application is now live!"
+          echo "🚀 Application is now live on Railway!"
       
       - name: ❌ Failure Notification
         if: ${{ needs.deploy.result == 'failure' }}
