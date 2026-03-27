@@ -122,7 +122,7 @@ jobs:
         run: npm install -g @railway/cli
       
       - name: 🚀 Deploy to Railway
-        run: railway up --project f0bcd233-770f-4d13-8fb3-2368447742b1 --environment production
+        run: railway up --project f0bcd233-770f-4d13-8fb3-2368447742b1 --environment production --service kanban-backend
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
       
