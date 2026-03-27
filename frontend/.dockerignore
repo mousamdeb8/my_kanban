@@ -56,4 +56,3 @@ README.md
 Dockerfile
 .dockerignore
 docker-compose.yml
-nginx.conf
